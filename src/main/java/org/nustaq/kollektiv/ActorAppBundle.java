@@ -104,6 +104,5 @@ public class ActorAppBundle implements Serializable {
         }
         return null;
     }
-
-
+    
 }

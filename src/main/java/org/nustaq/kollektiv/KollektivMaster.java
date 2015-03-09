@@ -4,16 +4,15 @@ import org.nustaq.kontraktor.Actor;
 import org.nustaq.kontraktor.Actors;
 import org.nustaq.kontraktor.Future;
 import org.nustaq.kontraktor.Promise;
+import org.nustaq.kontraktor.annotations.CallerSideMethod;
 import org.nustaq.kontraktor.remoting.tcp.TCPActorServer;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -29,18 +28,52 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         return master;
     }
 
-    List<KollektivMember> members;
     ActorAppBundle cachedBundle;
+
+    // shared state
+    Map<String,MemberDescription> memberMap = new ConcurrentHashMap<>();
+    Map<String,MemberDescription> roleMap = new ConcurrentHashMap<>();
+    List<MemberDescription> members;
+    //..
 
     public void $init() {
         members = new ArrayList<>();
     }
 
-    public void $registerMember(MemberDescription sld, KollektivMember memb) {
+    public void $registerMember(MemberDescription sld) {
         System.out.println("receive registration " + sld + " members:" + members.size() + 1);
-        members.add(memb);
-        memb.$defineNameSpace(getCachedBundle());
+        addMember(sld);
+        sld.getMember().$defineNameSpace(getCachedBundle());
     }
+
+    void addMember(MemberDescription sld) {
+        synchronized (members) {
+            members.add(sld);
+            memberMap.put(sld.getNodeId(), sld );
+        }
+    }
+
+    boolean removeMember(Actor closedActor) {
+        boolean res = members.remove(closedActor);
+        for (Iterator<Map.Entry<String, MemberDescription>> iterator = memberMap.entrySet().iterator(); iterator.hasNext(); ) {
+            Map.Entry<String, MemberDescription> next = iterator.next();
+            if ( next.getValue().getMember() == closedActor )
+            {
+                memberMap.remove(next.getKey());
+                break;
+            }
+        }
+        for (Iterator<Map.Entry<String, MemberDescription>> iterator = roleMap.entrySet().iterator(); iterator.hasNext(); ) {
+            Map.Entry<String, MemberDescription> next = iterator.next();
+            if ( next.getValue().getMember() == closedActor )
+            {
+                roleMap.remove(next.getKey());
+                break;
+            }
+        }
+        return res;
+    }
+
 
     ActorAppBundle getCachedBundle() {
         if ( cachedBundle == null ) {
@@ -94,7 +127,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     }
 
     public void $memberDisconnected(Actor closedActor) {
-        members.remove(closedActor);
+        removeMember(closedActor);
         System.out.println("member disconnected "+closedActor+" members remaining:"+members.size());
     }
 
@@ -117,12 +150,62 @@ public class KollektivMaster extends Actor<KollektivMaster> {
             return new Promise<>(null,"no members avaiable");
         }
         Promise res = new Promise<>();
-        members.get(0).$run(actorClass.getName(), nameSpace).then((r, e) -> {
+        members.get(0).getMember().$run(actorClass.getName(), nameSpace).then((r, e) -> {
             res.receive(r, e);
         });
         return res;
     }
 
+    public Future<List<MemberDescription>> $getMembers() {
+        return new Promise<>(null);
+    }
 
+    ///////////////////////////////////////////////////////////////////////////////////
+    //
+    //  sync API
+    //
+
+    @CallerSideMethod public void setRole( KollektivMember member, String role ) {
+        List<MemberDescription> copy = getActor().members;
+        synchronized (copy) {
+            for (int i = 0; i < copy.size(); i++) {
+                MemberDescription kollektivMember = copy.get(i);
+                if ( kollektivMember.getMember() == member ) {
+                    getActor().roleMap.put(role,kollektivMember);
+                }
+            }
+        }
+    }
+
+    @CallerSideMethod public KollektivMember byRole( String role ) {
+        MemberDescription memberDescription = getActor().roleMap.get(role);
+        if ( memberDescription != null )
+            return memberDescription.getMember();
+        return null;
+    }
+
+    //fixme: slowish
+    @CallerSideMethod public MemberDescription getDescription( KollektivMember ref ) {
+        for (int i = 0; i < members.size(); i++) {
+            MemberDescription memberDescription = members.get(i);
+            if ( memberDescription.getMember() == ref ) {
+                return memberDescription;
+            }
+        }
+        return null;
+    }
+
+    @CallerSideMethod public KollektivMember byId( String nodeId ) {
+        MemberDescription memberDescription = getActor().memberMap.get(nodeId);
+        if ( memberDescription != null )
+            return memberDescription.getMember();
+        return null;
+    }
+
+    @CallerSideMethod public List<MemberDescription> getMembers() {
+        synchronized (getActor().members) {
+            return new ArrayList<>(members);
+        }
+    }
 
 }

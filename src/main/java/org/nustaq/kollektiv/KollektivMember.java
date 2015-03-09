@@ -57,7 +57,7 @@ public class KollektivMember extends Actor<KollektivMember> {
                     )
                     .onResult(actor -> {
                         masters.put(s, actor);
-                        actor.$registerMember(new MemberDescription(nodeId), self());
+                        actor.$registerMember(new MemberDescription(self(),nodeId,-1));
                     })
                     .onError(err -> System.out.println("failed to connect " + s));
                 } catch (IOException e) {
@@ -130,6 +130,14 @@ public class KollektivMember extends Actor<KollektivMember> {
             });
             bundle.setBaseDir(base.getAbsolutePath());
             MemberClassLoader memberClassLoader = new MemberClassLoader(bundle, new URL[]{base.toURL()}, getClass().getClassLoader());
+            memberClassLoader.setBase( base );
+            File[] list = base.listFiles();
+            for (int i = 0; list != null && i < list.length; i++) {
+                File file = list[i];
+                if ( file.getName().endsWith(".jar") ) {
+                    memberClassLoader.addURL(file);
+                }
+            }
             bundle.setLoader(memberClassLoader);
             apps.put(bundle.getName(),bundle);
         } catch (MalformedURLException e) {
