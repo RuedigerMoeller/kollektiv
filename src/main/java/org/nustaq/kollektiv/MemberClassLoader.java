@@ -66,13 +66,14 @@ public class MemberClassLoader extends URLClassLoader implements ClassPathProvid
     }
 
     protected Class<?> findClass(String name) throws ClassNotFoundException {
-        byte[] aClass = bundle.findClass(name);
-        if ( aClass != null ) {
-            System.out.println("** load class ** "+name);
-            return defineClass(aClass, 0, aClass.length);
-        }
-        else
-            return null;
+        return super.findClass(name);
+//        byte[] aClass = bundle.findClass(name);
+//        if ( aClass != null ) {
+//            System.out.println("** load class ** "+name);
+//            return defineClass(aClass, 0, aClass.length);
+//        }
+//        else
+//            return null;
     }
 
     public void setBase(File base) {

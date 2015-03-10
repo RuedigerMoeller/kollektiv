@@ -8,9 +8,7 @@ import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Created by moelrue on 3/6/15.
@@ -30,7 +28,7 @@ public class ActorAppBundle implements Serializable {
 
     String name;
     HashMap<String,CPEntry> resources = new HashMap<>();
-    Actor mainActor;
+    List<Actor> actors = new ArrayList<>();
 
     transient String baseDir;
     transient MemberClassLoader loader;
@@ -55,12 +53,12 @@ public class ActorAppBundle implements Serializable {
         this.resources = resources;
     }
 
-    public Actor getMainActor() {
-        return mainActor;
+    public void addActor(Actor act) {
+        actors.add(act);
     }
 
-    public void setMainActor(Actor mainActor) {
-        this.mainActor = mainActor;
+    public List<Actor> getActors() {
+        return actors;
     }
 
     public HashMap<String, CPEntry> getResources() {

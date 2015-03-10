@@ -12,8 +12,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -30,6 +33,18 @@ public class KollektivMaster extends Actor<KollektivMaster> {
 
     ActorAppBundle cachedBundle;
 
+    static class ListTrigger {
+        public ListTrigger(Supplier<Boolean> condition, Future toNotify) {
+            this.condition = condition;
+            this.toNotify = toNotify;
+        }
+
+        Supplier<Boolean> condition;
+        Future toNotify;
+    }
+
+    List<ListTrigger> triggers = new ArrayList<>();
+
     // shared state
     Map<String,MemberDescription> memberMap = new ConcurrentHashMap<>();
     Map<String,MemberDescription> roleMap = new ConcurrentHashMap<>();
@@ -43,7 +58,16 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     public void $registerMember(MemberDescription sld) {
         System.out.println("receive registration " + sld + " members:" + members.size() + 1);
         addMember(sld);
-        sld.getMember().$defineNameSpace(getCachedBundle());
+        sld.getMember().$defineNameSpace(getCachedBundle()).then( (r,e) -> {
+            if ( e == null )
+                System.out.println("transfer COMPLETE: "+sld);
+            else {
+                if ( e instanceof Throwable ) {
+                    ((Throwable)e).printStackTrace();
+                }
+                System.out.println("transfer FAILED: " + sld + " " + e);
+            }
+        });
     }
 
     void addMember(MemberDescription sld) {
@@ -133,16 +157,19 @@ public class KollektivMaster extends Actor<KollektivMaster> {
 
     public Future $onMemberMoreThan(int i) {
         Promise p = new Promise();
-        AtomicReference<Runnable> toRun = new AtomicReference<>();
-        toRun.set( ()-> {
-            if (members.size() >= i) {
-                p.signal();
-            } else {
-                delayed(1000,toRun.get());
-            }
-        });
-        delayed(100, toRun.get());
+        triggers.add(new ListTrigger(() -> members.size() >= i, p));
+        evaluateTriggers();
         return p;
+    }
+
+    private void evaluateTriggers() {
+        triggers = triggers.stream().filter( trigger -> {
+            if (trigger.condition.get().booleanValue()) {
+                trigger.toNotify.signal();
+                return false;
+            }
+            return true;
+        }).collect( Collectors.toList() );
     }
 
     public Future<Actor> $run(Class actorClass, String nameSpace) {

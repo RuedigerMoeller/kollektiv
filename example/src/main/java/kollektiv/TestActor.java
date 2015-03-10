@@ -33,13 +33,14 @@ public class TestActor extends Actor<TestActor> {
         KollektivMaster master = KollektivMaster.Start(3456);
 
         master.$onMemberMoreThan(1).then(() -> {
+            System.out.println("starting remote actor");
             master.$run(TestActor.class, "Hello")
                 .onError(e -> System.out.println(e))
                 .onResult(act -> {
                     TestActor tact = (TestActor) act;
-                    System.out.println(tact);
+                    System.out.println(".. remote actor started: "+tact);
                     tact.$init();
-                    tact.$method("Haha Hoho").onResult(res -> System.out.println(res));
+                    tact.$method("Höö").onResult(res -> System.out.println(res));
                     new Thread( () -> {
                         int count = 0;
                         while( true && ! tact.isStopped() ) {

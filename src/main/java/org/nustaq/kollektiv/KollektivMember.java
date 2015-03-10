@@ -27,7 +27,6 @@ public class KollektivMember extends Actor<KollektivMember> {
     List<String> masterAddresses;
     HashMap<String,KollektivMaster> masters;
     String nodeId = "SL"+System.currentTimeMillis()+":"+(System.nanoTime()&0xffff);
-    String clazzDirBase = "/tmp";
     HashMap<String, ActorAppBundle> apps = new HashMap<>();
 
 
@@ -94,6 +93,7 @@ public class KollektivMember extends Actor<KollektivMember> {
             Object actorBS = bootstrap.getConstructor(Class.class).newInstance(actorClazz);
             Field f = actorBS.getClass().getField("actor");
             Actor resAct = (Actor) f.get(actorBS);
+            actorAppBundle.addActor(resAct);
             res.receive(resAct,null);
         } catch (Exception e) {
             e.printStackTrace();
@@ -106,11 +106,11 @@ public class KollektivMember extends Actor<KollektivMember> {
         try {
             ActorAppBundle actorAppBundle = apps.get(bundle.getName());
             if ( actorAppBundle != null ) {
-                actorAppBundle.getMainActor().$stop();
+                actorAppBundle.getActors().forEach( actor -> actor.$stop() );
             }
-            System.out.println("define name space "+bundle.getName()+" size "+bundle.getSizeKB() );
             File base = new File(tmpDir + File.separator + bundle.getName());
             base.mkdirs();
+            System.out.println("define name space " + bundle.getName() + " size " + bundle.getSizeKB()+" filebase:"+base.getAbsolutePath());
             bundle.getResources().entrySet().forEach(entry -> {
                 if (entry.getKey().endsWith(".jar")) {
                     String name = new File(entry.getKey()).getName();
@@ -140,6 +140,7 @@ public class KollektivMember extends Actor<KollektivMember> {
             }
             bundle.setLoader(memberClassLoader);
             apps.put(bundle.getName(),bundle);
+            System.out.println(".. done");
         } catch (MalformedURLException e) {
             e.printStackTrace();
         }
