@@ -32,6 +32,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     }
 
     ActorAppBundle cachedBundle;
+    String cachedCP;
 
     static class ListTrigger {
         public ListTrigger(Supplier<Boolean> condition, Future toNotify) {
@@ -58,7 +59,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     public void $registerMember(MemberDescription sld) {
         System.out.println("receive registration " + sld + " members:" + members.size() + 1);
         addMember(sld);
-        sld.getMember().$defineNameSpace(getCachedBundle()).then( (r,e) -> {
+        sld.getMember().$defineNameSpace(getCachedBundle(sld.getClasspath())).then( (r,e) -> {
             if ( e == null )
                 System.out.println("transfer COMPLETE: "+sld);
             else {
@@ -99,15 +100,30 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     }
 
 
-    ActorAppBundle getCachedBundle() {
+    ActorAppBundle getCachedBundle(String classpath) {
         if ( cachedBundle == null ) {
+            cachedCP = classpath;
             cachedBundle = new ActorAppBundle("Hello");
-            buildAppBundle(cachedBundle);
+            buildAppBundle(cachedBundle,classpath);
+        } else {
+            // some members might have a different set of predefined jars ..
+            if ( ! cachedCP.equals(classpath) ) {
+                ActorAppBundle bundle = new ActorAppBundle("Hello");
+                buildAppBundle(bundle,classpath);
+                return bundle;
+            }
         }
         return cachedBundle;
     }
 
-    void buildAppBundle(ActorAppBundle bundle) {
+    void buildAppBundle(ActorAppBundle bundle, String classpath) {
+        String[] foreignpath = classpath.split(":;:");
+        HashSet<String> presentjars = new HashSet<>();
+        for (int i = 0; i < foreignpath.length; i++) {
+            String s = foreignpath[i];
+            if ( s.endsWith(".jar") )
+                presentjars.add( new File(s).getName());
+        }
         String cp = System.getProperty("java.class.path");
         String bcp = System.getProperty("sun.boot.class.path");
         String[] path = cp.split(File.pathSeparator);
@@ -119,7 +135,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
                )
             {
                 File pathOrJar = new File(s);
-                if (s.endsWith(".jar") && pathOrJar.exists()) {
+                if (s.endsWith(".jar") && pathOrJar.exists() && ! presentjars.contains(pathOrJar.getName()) ) {
                     try {
                         bundle.put(pathOrJar.getName(), Files.readAllBytes(Paths.get(s)) );
                     } catch (IOException e) {
@@ -163,7 +179,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     }
 
     private void evaluateTriggers() {
-        triggers = triggers.stream().filter( trigger -> {
+        triggers = triggers.stream().filter(trigger -> {
             if (trigger.condition.get().booleanValue()) {
                 trigger.toNotify.signal();
                 return false;

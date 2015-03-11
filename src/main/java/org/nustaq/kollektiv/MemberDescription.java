@@ -1,5 +1,6 @@
 package org.nustaq.kollektiv;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
@@ -17,6 +18,7 @@ public class MemberDescription implements Serializable {
     int numCores;
 
     KollektivMember member;
+    String classpath;
 
     public MemberDescription( KollektivMember memberRef, String nodeId, int allowedCores) {
         this.nodeId = nodeId;
@@ -41,6 +43,14 @@ public class MemberDescription implements Serializable {
             }
         }
         numCores = allowedCores > 0 ? allowedCores : Runtime.getRuntime().availableProcessors();
+        classpath = System.getProperty("java.class.path").replace(File.pathSeparator,":;:").replace("\\","/");
+    }
+
+    /**
+     * @return fixed classpath to avoid transmission of jars which are already at members classpath
+     */
+    public String getClasspath() {
+        return classpath;
     }
 
     public String getNodeId() {

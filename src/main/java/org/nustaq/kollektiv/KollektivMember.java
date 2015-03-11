@@ -102,27 +102,56 @@ public class KollektivMember extends Actor<KollektivMember> {
         return res;
     }
 
+    private boolean tryDelRecursive(File base) {
+        if ( ! base.exists() )
+            return true;
+        try {
+            int count[] = {0};
+            int prevCount;
+            do {
+                prevCount = count[0];
+                count[0] = 0;
+                if ( ! base.exists() )
+                    return true;
+                Files.walk(Paths.get(base.getAbsolutePath()), 65536).forEach(path -> {
+                    count[0]++;
+                    File file = path.toAbsolutePath().toFile();
+                    file.delete();
+                });
+            } while( count[0] != prevCount );
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        base.delete();
+        return !base.exists();
+    }
+
     public Future $defineNameSpace( ActorAppBundle bundle ) {
         try {
             ActorAppBundle actorAppBundle = apps.get(bundle.getName());
             if ( actorAppBundle != null ) {
-                actorAppBundle.getActors().forEach( actor -> actor.$stop() );
+                actorAppBundle.getActors().forEach(actor -> actor.$stop());
             }
             File base = new File(tmpDir + File.separator + bundle.getName());
+            int count = 0;
+            while ( ! tryDelRecursive(base) ) {
+                base = new File(tmpDir + File.separator + bundle.getName() + count++);
+            }
             base.mkdirs();
             System.out.println("define name space " + bundle.getName() + " size " + bundle.getSizeKB()+" filebase:"+base.getAbsolutePath());
+            final File finalBase = base;
             bundle.getResources().entrySet().forEach(entry -> {
                 if (entry.getKey().endsWith(".jar")) {
                     String name = new File(entry.getKey()).getName();
                     try {
-                        Files.write(Paths.get(base.getAbsolutePath(), name), entry.getValue().bytes, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+                        Files.write(Paths.get(finalBase.getAbsolutePath(), name), entry.getValue().bytes, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
                 } else {
                     try {
-                        new File(base.getAbsolutePath() + File.separator + entry.getKey()).getParentFile().mkdirs();
-                        Files.write(Paths.get(base.getAbsolutePath(), entry.getKey()), entry.getValue().bytes, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+                        new File(finalBase.getAbsolutePath() + File.separator + entry.getKey()).getParentFile().mkdirs();
+                        Files.write(Paths.get(finalBase.getAbsolutePath(), entry.getKey()), entry.getValue().bytes, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
