@@ -1,11 +1,9 @@
 package org.nustaq.kollektiv;
 
-import org.nustaq.kontraktor.Actor;
-import org.nustaq.kontraktor.Actors;
-import org.nustaq.kontraktor.Future;
-import org.nustaq.kontraktor.Promise;
+import org.nustaq.kontraktor.*;
 import org.nustaq.kontraktor.annotations.CallerSideMethod;
 import org.nustaq.kontraktor.remoting.tcp.TCPActorServer;
+import org.nustaq.kontraktor.util.Log;
 
 import java.io.File;
 import java.io.IOException;
@@ -34,6 +32,15 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     ActorAppBundle cachedBundle;
     String cachedCP;
 
+    public void $heartbeat(String id) {
+        MemberDescription memberDescription = memberMap.get(id);
+        if ( memberDescription != null )
+            memberDescription.updateHeartbeat();
+        else {
+            // System.out.println("hearbeat of unknown member "+id); avoid false alarm during init would be
+        }
+    }
+
     static class ListTrigger {
         public ListTrigger(Supplier<Boolean> condition, Future toNotify) {
             this.condition = condition;
@@ -56,7 +63,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         members = new ArrayList<>();
     }
 
-    public void $registerMember(MemberDescription sld) {
+    public Future<MasterDescription> $registerMember(MemberDescription sld) {
         System.out.println("receive registration " + sld + " members:" + members.size() + 1);
         addMember(sld);
         sld.getMember().$defineNameSpace(getCachedBundle(sld.getClasspath())).then( (r,e) -> {
@@ -69,6 +76,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
                 System.out.println("transfer FAILED: " + sld + " " + e);
             }
         });
+        return new Promise<>(new MasterDescription());
     }
 
     void addMember(MemberDescription sld) {
@@ -137,7 +145,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
                 File pathOrJar = new File(s);
                 if (s.endsWith(".jar") && pathOrJar.exists() && ! presentjars.contains(pathOrJar.getName()) ) {
                     try {
-                        bundle.put(pathOrJar.getName(), Files.readAllBytes(Paths.get(s)) );
+                        bundle.put(pathOrJar.getName(), Files.readAllBytes(Paths.get(s)));
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -190,7 +198,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
 
     public Future<Actor> $run(Class actorClass, String nameSpace) {
         if ( members.size() == 0 ) {
-            return new Promise<>(null,"no members avaiable");
+            return new Promise<>(null,"no members available");
         }
         Promise res = new Promise<>();
         members.get(0).getMember().$run(actorClass.getName(), nameSpace).then((r, e) -> {
@@ -199,16 +207,23 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         return res;
     }
 
-    public Future<List<MemberDescription>> $getMembers() {
-        return new Promise<>(null);
+    public void $getMembers( Callback<MemberDescription> cb ) {
+        members.forEach( member -> cb.receive(member,CONT) );
+        cb.receive(null, FINSILENT);
+    }
+
+    public void $remoteLog( int severity, String source, String msg ) {
+        Log.Lg.$msg( null, severity, source, null, msg );
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
     //
-    //  sync API
+    //  sync, local API
     //
 
     @CallerSideMethod public void setRole( KollektivMember member, String role ) {
+        if ( isRemote() )
+            throw new RuntimeException("cannot call on remote proxy");
         List<MemberDescription> copy = getActor().members;
         synchronized (copy) {
             for (int i = 0; i < copy.size(); i++) {
@@ -221,6 +236,8 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     }
 
     @CallerSideMethod public KollektivMember byRole( String role ) {
+        if ( isRemote() )
+            throw new RuntimeException("cannot call on remote proxy");
         MemberDescription memberDescription = getActor().roleMap.get(role);
         if ( memberDescription != null )
             return memberDescription.getMember();
@@ -229,6 +246,8 @@ public class KollektivMaster extends Actor<KollektivMaster> {
 
     //fixme: slowish
     @CallerSideMethod public MemberDescription getDescription( KollektivMember ref ) {
+        if ( isRemote() )
+            throw new RuntimeException("cannot call on remote proxy");
         for (int i = 0; i < members.size(); i++) {
             MemberDescription memberDescription = members.get(i);
             if ( memberDescription.getMember() == ref ) {
@@ -239,6 +258,8 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     }
 
     @CallerSideMethod public KollektivMember byId( String nodeId ) {
+        if ( isRemote() )
+            throw new RuntimeException("cannot call on remote proxy");
         MemberDescription memberDescription = getActor().memberMap.get(nodeId);
         if ( memberDescription != null )
             return memberDescription.getMember();
@@ -246,6 +267,8 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     }
 
     @CallerSideMethod public List<MemberDescription> getMembers() {
+        if ( isRemote() )
+            throw new RuntimeException("cannot call on remote proxy");
         synchronized (getActor().members) {
             return new ArrayList<>(members);
         }

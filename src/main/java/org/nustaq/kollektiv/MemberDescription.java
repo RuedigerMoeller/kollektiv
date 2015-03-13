@@ -19,6 +19,7 @@ public class MemberDescription implements Serializable {
 
     KollektivMember member;
     String classpath;
+    transient long lastHB = System.currentTimeMillis();
 
     public MemberDescription( KollektivMember memberRef, String nodeId, int allowedCores) {
         this.nodeId = nodeId;
@@ -86,4 +87,11 @@ public class MemberDescription implements Serializable {
                 '}';
     }
 
+    public long getLastHB() {
+        return lastHB;
+    }
+
+    public void updateHeartbeat() {
+        lastHB = System.currentTimeMillis();
+    }
 }

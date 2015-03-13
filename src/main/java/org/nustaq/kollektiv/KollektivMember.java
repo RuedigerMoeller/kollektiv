@@ -5,9 +5,12 @@ import org.nustaq.kontraktor.Actors;
 import org.nustaq.kontraktor.Future;
 import org.nustaq.kontraktor.Promise;
 import org.nustaq.kontraktor.remoting.tcp.TCPActorClient;
+import org.nustaq.kontraktor.util.Log;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Field;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -25,10 +28,10 @@ public class KollektivMember extends Actor<KollektivMember> {
 
     String tmpDir = "/tmp";
     List<String> masterAddresses;
-    HashMap<String,KollektivMaster> masters;
+    KollektivMaster master;
     String nodeId = "SL"+System.currentTimeMillis()+":"+(System.nanoTime()&0xffff);
     HashMap<String, ActorAppBundle> apps = new HashMap<>();
-
+    MasterDescription masterDescription;
 
     public void $init() {
         List<String> addr = new ArrayList<>();
@@ -38,15 +41,15 @@ public class KollektivMember extends Actor<KollektivMember> {
 
     public void $initWithOptions(List<String> masterAddresses) {
         this.masterAddresses = masterAddresses;
-        masters = new HashMap<>();
         $startHB();
     }
+
 
     public void $startHB() {
         checkThread();
         for (int i = 0; i < masterAddresses.size(); i++) {
             String s = masterAddresses.get(i);
-            if ( masters.get(s) == null ) {
+            if ( master == null ) {
                 String[] split = s.split(":");
                 try {
                     TCPActorClient.Connect(
@@ -54,23 +57,43 @@ public class KollektivMember extends Actor<KollektivMember> {
                         split[0], Integer.parseInt(split[1]),
                         disconnectedRef -> self().$refDisconnected(s,disconnectedRef)
                     )
-                    .onResult(actor -> {
-                        masters.put(s, actor);
-                        actor.$registerMember(new MemberDescription(self(),nodeId,-1));
+                    .onResult( actor -> {
+                        master = actor;
+                        actor.$registerMember(new MemberDescription( self(), nodeId, -1 ))
+                            .onResult( md -> {
+                                masterDescription = md;
+                                Log.Lg.$setLogWrapper(
+                                    (Thread t, int severity, Object source, Throwable ex, String msg) -> {
+                                        String exString = null;
+                                        if ( ex != null ) {
+                                            StringWriter sw = new StringWriter();
+                                            PrintWriter pw = new PrintWriter(sw);
+                                            ex.printStackTrace(pw);
+                                            exString = sw.toString();
+                                        }
+                                        actor.$remoteLog( severity, nodeId+":"+source, exString == null ? msg : msg + "\n" + exString );
+                                    }
+                                );
+                                Log.Lg.info(this, " start logging from "+nodeId );
+                            });
                     })
                     .onError(err -> System.out.println("failed to connect " + s));
                 } catch (IOException e) {
                     System.out.println("could not connect "+e);
                 }
+            } else {
+                master.$heartbeat(nodeId);
             }
         }
-        delayed(1000, () -> self().$startHB());
+        delayed( 1000, () -> self().$startHB() );
     }
 
     public void $refDisconnected(String address, Actor disconnectedRef) {
-        checkThread();
-        System.out.println("actor disconnected "+disconnectedRef+" address:"+address);
-        masters.remove(address);
+        if ( disconnectedRef == master ) {
+            Log.Lg.$resetToSysout();
+            master = null;
+        }
+        System.out.println("actor disconnected " + disconnectedRef + " address:" + address);
     }
 
     public static class ActorBootstrap {
