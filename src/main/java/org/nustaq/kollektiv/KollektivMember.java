@@ -20,70 +20,62 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import com.beust.jcommander.*;
 
 /**
  * Created by moelrue on 3/6/15.
  */
 public class KollektivMember extends Actor<KollektivMember> {
 
-    String tmpDir = "/tmp";
-    List<String> masterAddresses;
     KollektivMaster master;
     String nodeId = "SL"+System.currentTimeMillis()+":"+(System.nanoTime()&0xffff);
     HashMap<String, ActorAppBundle> apps = new HashMap<>();
     MasterDescription masterDescription;
 
-    public void $init() {
-        List<String> addr = new ArrayList<>();
-        addr.add("127.0.0.1:3456");
-        $initWithOptions(addr);
-    }
+    Options options;
 
-    public void $initWithOptions(List<String> masterAddresses) {
-        this.masterAddresses = masterAddresses;
+    public void $init(Options options) {
+        this.options = options;
         $startHB();
     }
 
-
     public void $startHB() {
         checkThread();
-        for (int i = 0; i < masterAddresses.size(); i++) {
-            String s = masterAddresses.get(i);
-            if ( master == null ) {
-                String[] split = s.split(":");
-                try {
-                    TCPActorClient.Connect(
-                        KollektivMaster.class,
-                        split[0], Integer.parseInt(split[1]),
-                        disconnectedRef -> self().$refDisconnected(s,disconnectedRef)
-                    )
-                    .onResult( actor -> {
-                        master = actor;
-                        actor.$registerMember(new MemberDescription( self(), nodeId, -1 ))
-                            .onResult( md -> {
-                                masterDescription = md;
-                                Log.Lg.$setLogWrapper(
-                                    (Thread t, int severity, Object source, Throwable ex, String msg) -> {
-                                        String exString = null;
-                                        if ( ex != null ) {
-                                            StringWriter sw = new StringWriter();
-                                            PrintWriter pw = new PrintWriter(sw);
-                                            ex.printStackTrace(pw);
-                                            exString = sw.toString();
-                                        }
-                                        actor.$remoteLog( severity, nodeId+":"+source, exString == null ? msg : msg + "\n" + exString );
+        String s = options.getMasterAddr();
+        if ( master == null ) {
+            String[] split = s.split(":");
+            try {
+                TCPActorClient.Connect(
+                    KollektivMaster.class,
+                    split[0], Integer.parseInt(split[1]),
+                    disconnectedRef -> self().$refDisconnected(s,disconnectedRef)
+                )
+                .onResult( actor -> {
+                    master = actor;
+                    actor.$registerMember(new MemberDescription( self(), nodeId, options.getAvailableProcessors() ))
+                        .onResult( md -> {
+                            masterDescription = md;
+                            Log.Lg.$setLogWrapper(
+                                (Thread t, int severity, Object source, Throwable ex, String msg) -> {
+                                    String exString = null;
+                                    if ( ex != null ) {
+                                        StringWriter sw = new StringWriter();
+                                        PrintWriter pw = new PrintWriter(sw);
+                                        ex.printStackTrace(pw);
+                                        exString = sw.toString();
                                     }
-                                );
-                                Log.Lg.info(this, " start logging from "+nodeId );
-                            });
-                    })
-                    .onError(err -> System.out.println("failed to connect " + s));
-                } catch (IOException e) {
-                    System.out.println("could not connect "+e);
-                }
-            } else {
-                master.$heartbeat(nodeId);
+                                    actor.$remoteLog( severity, nodeId+":"+source, exString == null ? msg : msg + "\n" + exString );
+                                }
+                            );
+                            Log.Lg.info(this, " start logging from "+nodeId );
+                        });
+                })
+                .onError(err -> System.out.println("failed to connect " + s));
+            } catch (IOException e) {
+                System.out.println("could not connect "+e);
             }
+        } else {
+            master.$heartbeat(nodeId);
         }
         delayed( 1000, () -> self().$startHB() );
     }
@@ -155,10 +147,10 @@ public class KollektivMember extends Actor<KollektivMember> {
             if ( actorAppBundle != null ) {
                 actorAppBundle.getActors().forEach(actor -> actor.$stop());
             }
-            File base = new File(tmpDir + File.separator + bundle.getName());
+            File base = new File( options.getTmpDirectory() + File.separator + bundle.getName());
             int count = 0;
             while ( ! tryDelRecursive(base) ) {
-                base = new File(tmpDir + File.separator + bundle.getName() + count++);
+                base = new File( options.getTmpDirectory() + File.separator + bundle.getName() + count++);
             }
             base.mkdirs();
             System.out.println("define name space " + bundle.getName() + " size " + bundle.getSizeKB()+" filebase:"+base.getAbsolutePath());
@@ -199,9 +191,42 @@ public class KollektivMember extends Actor<KollektivMember> {
         return new Promise<>(null);
     }
 
+    public static class Options {
+        @Parameter
+        int availableProcessors;
+        @Parameter
+        String name;
+        @Parameter
+        String tmpDirectory;
+        @Parameter
+        String masterAddr = "127.0.0.1:3456";
+
+        public int getAvailableProcessors() {
+            if (availableProcessors == 0 ) {
+                return Runtime.getRuntime().availableProcessors();
+            }
+            return availableProcessors;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public String getTmpDirectory() {
+            return tmpDirectory;
+        }
+
+        public String getMasterAddr() {
+            return masterAddr;
+        }
+
+    }
+
     public static void main( String a[] ) {
+        Options options = new Options();
+        JCommander com = new JCommander(options,a);
         KollektivMember sl = Actors.AsActor(KollektivMember.class);
-        sl.$init();
+        sl.$init(options);
         sl.$refDisconnected(null,null);
     }
 

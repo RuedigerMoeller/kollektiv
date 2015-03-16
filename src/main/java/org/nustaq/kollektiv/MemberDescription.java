@@ -43,7 +43,7 @@ public class MemberDescription implements Serializable {
                 }
             }
         }
-        numCores = allowedCores > 0 ? allowedCores : Runtime.getRuntime().availableProcessors();
+        numCores = allowedCores;
         classpath = System.getProperty("java.class.path").replace(File.pathSeparator,":;:").replace("\\","/");
     }
 
