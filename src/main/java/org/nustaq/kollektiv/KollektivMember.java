@@ -64,7 +64,7 @@ public class KollektivMember extends Actor<KollektivMember> {
                                         ex.printStackTrace(pw);
                                         exString = sw.toString();
                                     }
-                                    actor.$remoteLog( severity, nodeId+":"+source, exString == null ? msg : msg + "\n" + exString );
+                                    actor.$remoteLog( severity, nodeId+"["+source+"]", exString == null ? msg : msg + "\n" + exString );
                                 }
                             );
                             Log.Lg.info(this, " start logging from "+nodeId );
@@ -77,7 +77,7 @@ public class KollektivMember extends Actor<KollektivMember> {
         } else {
             master.$heartbeat(nodeId);
         }
-        delayed( 1000, () -> self().$startHB() );
+        delayed(1000, () -> self().$startHB());
     }
 
     public void $refDisconnected(String address, Actor disconnectedRef) {
@@ -183,7 +183,7 @@ public class KollektivMember extends Actor<KollektivMember> {
                 }
             }
             bundle.setLoader(memberClassLoader);
-            apps.put(bundle.getName(),bundle);
+            apps.put(bundle.getName(), bundle);
             System.out.println(".. done");
         } catch (MalformedURLException e) {
             e.printStackTrace();
@@ -192,19 +192,18 @@ public class KollektivMember extends Actor<KollektivMember> {
     }
 
     public static class Options {
-        @Parameter
-        int availableProcessors;
-        @Parameter
+        @Parameter( names = {"-c","-cores"}, description = "specify how many cores should be available. (Defaults to number of cores reported by OS).")
+        int availableProcessors = Runtime.getRuntime().availableProcessors();
+        @Parameter( names = {"-n", "-name"}, description = "optionally specify a symbolic name which can be used as a hint from the master process.")
         String name;
-        @Parameter
-        String tmpDirectory;
-        @Parameter
+        @Parameter( names = { "-t", "-tmp"}, description = "specify temporary directory to deploy downloaded classes/jars. Defaults to /tmp")
+        String tmpDirectory = "/tmp";
+        @Parameter( names = {"-m", "-master"}, description = "define master addr:port. Defaults to 127.0.0.1:3456")
         String masterAddr = "127.0.0.1:3456";
+        @Parameter(names = {"-h","-help","-?", "--help"}, help = true, description = "display help")
+        boolean help;
 
         public int getAvailableProcessors() {
-            if (availableProcessors == 0 ) {
-                return Runtime.getRuntime().availableProcessors();
-            }
             return availableProcessors;
         }
 
@@ -220,11 +219,33 @@ public class KollektivMember extends Actor<KollektivMember> {
             return masterAddr;
         }
 
+        @Override
+        public String toString() {
+            return "Options{" +
+                    "availableProcessors=" + getAvailableProcessors() +
+                    ", name='" + name + '\'' +
+                    ", tmpDirectory='" + tmpDirectory + '\'' +
+                    ", masterAddr='" + masterAddr + '\'' +
+                    '}';
+        }
     }
 
     public static void main( String a[] ) {
         Options options = new Options();
-        JCommander com = new JCommander(options,a);
+        JCommander com = new JCommander();
+        com.addObject(options);
+        try {
+            com.parse(a);
+        } catch (Exception ex) {
+            System.out.println("command line error: '"+ex.getMessage()+"'");
+            options.help = true;
+        }
+        if ( options.help ) {
+            com.usage();
+            System.exit(-1);
+        }
+
+        System.out.println("starting kollectiv member with "+options );
         KollektivMember sl = Actors.AsActor(KollektivMember.class);
         sl.$init(options);
         sl.$refDisconnected(null,null);

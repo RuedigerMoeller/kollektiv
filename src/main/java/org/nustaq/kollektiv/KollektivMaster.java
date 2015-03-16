@@ -10,11 +10,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -42,13 +40,33 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     }
 
     static class ListTrigger {
-        public ListTrigger(Supplier<Boolean> condition, Future toNotify) {
-            this.condition = condition;
-            this.toNotify = toNotify;
+        public static int ADD = 1;
+        public static int REM = 2;
+        public static int LIST_RELATED = 3;
+
+        public ListTrigger(Function<MemberDescription,Boolean> condition, int type) {
+            this.setCondition(condition);
+            this.setType(type);
         }
 
-        Supplier<Boolean> condition;
-        Future toNotify;
+        private Function<MemberDescription,Boolean> condition;
+        private int type;
+
+        public Function<MemberDescription, Boolean> getCondition() {
+            return condition;
+        }
+
+        public void setCondition(Function<MemberDescription, Boolean> condition) {
+            this.condition = condition;
+        }
+
+        public int getType() {
+            return type;
+        }
+
+        public void setType(int type) {
+            this.type = type;
+        }
     }
 
     List<ListTrigger> triggers = new ArrayList<>();
@@ -64,16 +82,16 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     }
 
     public Future<MasterDescription> $registerMember(MemberDescription sld) {
-        System.out.println("receive registration " + sld + " members:" + members.size() + 1);
+        Log.Info(this, "receive registration " + sld + " members:" + members.size() + 1);
         addMember(sld);
         sld.getMember().$defineNameSpace(getCachedBundle(sld.getClasspath())).then( (r,e) -> {
             if ( e == null )
-                System.out.println("transfer COMPLETE: "+sld);
+                Log.Info(this, "transfer COMPLETE: " + sld);
             else {
                 if ( e instanceof Throwable ) {
                     ((Throwable)e).printStackTrace();
                 }
-                System.out.println("transfer FAILED: " + sld + " " + e);
+                Log.Info(this, "transfer FAILED: " + sld + " " + e);
             }
         });
         return new Promise<>(new MasterDescription());
@@ -83,6 +101,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         synchronized (members) {
             members.add(sld);
             memberMap.put(sld.getNodeId(), sld );
+            evaluateTriggers(ListTrigger.ADD, sld);
         }
     }
 
@@ -93,6 +112,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
             if ( next.getValue().getMember() == closedActor )
             {
                 memberMap.remove(next.getKey());
+                evaluateTriggers(ListTrigger.REM,next.getValue());
                 break;
             }
         }
@@ -101,6 +121,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
             if ( next.getValue().getMember() == closedActor )
             {
                 roleMap.remove(next.getKey());
+//                evaluateTriggers(ListTrigger.REM,next.getValue());
                 break;
             }
         }
@@ -168,7 +189,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
                         e.printStackTrace();
                     }
                 } else {
-                    System.out.println("ignore " + s);
+                    Log.Info(this, "ignore " + s);
                 }
             }
         }
@@ -176,24 +197,47 @@ public class KollektivMaster extends Actor<KollektivMaster> {
 
     public void $memberDisconnected(Actor closedActor) {
         removeMember(closedActor);
-        System.out.println("member disconnected "+closedActor+" members remaining:"+members.size());
+        Log.Info(this, "member disconnected " + closedActor + " members remaining:" + members.size());
     }
 
+    public void $onMemberAdd(Function<MemberDescription,Boolean> md) {
+        triggers.add(new ListTrigger(description -> md.apply(description), ListTrigger.ADD));
+        members.forEach( member -> evaluateTriggers( ListTrigger.ADD, member ));
+    }
+
+    public void $onMemberRem(Function<MemberDescription,Boolean> md) {
+        triggers.add(new ListTrigger( description -> md.apply(description), ListTrigger.REM) );
+    }
+
+    /**
+     * fires once if number of members is >= given number
+     * @param i
+     * @return
+     */
     public Future $onMemberMoreThan(int i) {
         Promise p = new Promise();
-        triggers.add(new ListTrigger(() -> members.size() >= i, p));
-        evaluateTriggers();
+        triggers.add(
+            new ListTrigger( (description) -> {
+                if ( members.size() >= i) {
+                    p.notify();
+                    return true;
+                }
+                return false;
+            }, ListTrigger.LIST_RELATED)
+        );
+        evaluateTriggers(ListTrigger.LIST_RELATED, null);
         return p;
     }
 
-    private void evaluateTriggers() {
+    private void evaluateTriggers(int actionType, MemberDescription item) {
         triggers = triggers.stream().filter(trigger -> {
-            if (trigger.condition.get().booleanValue()) {
-                trigger.toNotify.signal();
-                return false;
+            if ((trigger.getType() == actionType)) {
+                if (trigger.getCondition().apply(item).booleanValue()) {
+                    return false;
+                }
             }
             return true;
-        }).collect( Collectors.toList() );
+        }).collect(Collectors.toList());
     }
 
     public Future<Actor> $run(Class actorClass, String nameSpace) {
@@ -270,7 +314,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         if ( isRemote() )
             throw new RuntimeException("cannot call on remote proxy");
         synchronized (getActor().members) {
-            return new ArrayList<>(members);
+            return new ArrayList<>(getActor().members);
         }
     }
 
