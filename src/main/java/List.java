@@ -13,6 +13,8 @@ public class List {
     int port = 3456;
     @Parameter(names={"-r","-reboot"}, description = "send a signal to all members to attempt a restart")
     boolean reboot = false;
+    @Parameter(names={"-changeMaster", "-cm"}, description = "change the address of the master members try to connect. Careful, a wrong host:port string can make members unreachable forever ..")
+    String retarget = null;
     @Parameter(names = {"-h","-help","-?", "--help"}, help = true, description = "display help")
     boolean help;
     @Parameter(names = {"-t","-time"}, description = "number of seconds to run and display add/remove messages.")
@@ -68,5 +70,6 @@ public class List {
         System.out.println("Members("+members.size()+"):");
         members.forEach(member -> System.out.println(member));
 
+        System.exit(-1);
     }
 }

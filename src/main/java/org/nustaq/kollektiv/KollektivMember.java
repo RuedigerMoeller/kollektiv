@@ -17,9 +17,8 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
+
 import com.beust.jcommander.*;
 
 /**
@@ -27,22 +26,32 @@ import com.beust.jcommander.*;
  */
 public class KollektivMember extends Actor<KollektivMember> {
 
+    public static final int RETRY_INTERVAL_MILLIS = 1000;
     KollektivMaster master;
-    String nodeId = "SL"+System.currentTimeMillis()+":"+(System.nanoTime()&0xffff);
+    String nodeId;
     HashMap<String, ActorAppBundle> apps = new HashMap<>();
     MasterDescription masterDescription;
 
     Options options;
+    Log localLog;
 
     public void $init(Options options) {
         this.options = options;
+        nodeId = options.getName()+"_"+MemberDescription.findHost()+(System.nanoTime()&0xffff)+(int)(Math.random()*99);
+        localLog = Actors.AsActor(Log.class,100000);
+        localLog.$setSeverity(Log.WARN);
         $startHB();
     }
 
+    boolean tryConnect = false;
     public void $startHB() {
         checkThread();
         String s = options.getMasterAddr();
         if ( master == null ) {
+            if ( ! tryConnect ) {
+                tryConnect = true;
+                localLog.warn(this,"trying to connect "+s);
+            }
             String[] split = s.split(":");
             try {
                 TCPActorClient.Connect(
@@ -50,42 +59,53 @@ public class KollektivMember extends Actor<KollektivMember> {
                     split[0], Integer.parseInt(split[1]),
                     disconnectedRef -> self().$refDisconnected(s,disconnectedRef)
                 )
-                .onResult( actor -> {
+                .onResult(actor -> {
                     master = actor;
-                    actor.$registerMember(new MemberDescription( self(), nodeId, options.getAvailableProcessors() ))
-                        .onResult( md -> {
+                    localLog.Warn(this, "connection successful");
+                    actor.$registerMember(new MemberDescription(self(), nodeId, options.getAvailableProcessors()))
+                        .onResult(md -> {
                             masterDescription = md;
+                            tryConnect = false;
                             Log.Lg.$setLogWrapper(
-                                (Thread t, int severity, Object source, Throwable ex, String msg) -> {
-                                    String exString = null;
-                                    if ( ex != null ) {
-                                        StringWriter sw = new StringWriter();
-                                        PrintWriter pw = new PrintWriter(sw);
-                                        ex.printStackTrace(pw);
-                                        exString = sw.toString();
+                                    (Thread t, int severity, Object source, Throwable ex, String msg) -> {
+                                        String exString = null;
+                                        if (ex != null) {
+                                            StringWriter sw = new StringWriter();
+                                            PrintWriter pw = new PrintWriter(sw);
+                                            ex.printStackTrace(pw);
+                                            exString = sw.toString();
+                                        }
+                                        if (actor.isStopped()) {
+                                            if (Log.Lg.getSeverity() <= severity )
+                                                Log.Lg.defaultLogger.msg(t, severity, source, ex, msg);
+                                        } else {
+                                            actor.$remoteLog(severity, nodeId + "[" + source + "]", exString == null ? msg : msg + "\n" + exString);
+                                        }
                                     }
-                                    actor.$remoteLog( severity, nodeId+"["+source+"]", exString == null ? msg : msg + "\n" + exString );
-                                }
                             );
-                            Log.Lg.info(this, " start logging from "+nodeId );
+                            Log.Lg.warn(this, " start logging from " + nodeId);
+                            delayed(1000, () -> self().$startHB());
                         });
                 })
-                .onError(err -> System.out.println("failed to connect " + s));
+                .onError(err -> {
+                    localLog.info(this,"failed to connect " + s);
+                    delayed(RETRY_INTERVAL_MILLIS, () -> self().$startHB());
+                });
             } catch (IOException e) {
-                System.out.println("could not connect "+e);
+                localLog.warn(this,"could not connect "+e);
             }
         } else {
             master.$heartbeat(nodeId);
+            delayed(1000, () -> self().$startHB());
         }
-        delayed(1000, () -> self().$startHB());
     }
 
     public void $refDisconnected(String address, Actor disconnectedRef) {
         if ( disconnectedRef == master ) {
-            Log.Lg.$resetToSysout();
+            Log.Lg.resetToSysout();
             master = null;
         }
-        System.out.println("actor disconnected " + disconnectedRef + " address:" + address);
+        localLog.warn(this, "actor disconnected " + disconnectedRef + " address:" + address);
     }
 
     public static class ActorBootstrap {
@@ -134,8 +154,8 @@ public class KollektivMember extends Actor<KollektivMember> {
                     file.delete();
                 });
             } while( count[0] != prevCount );
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            localLog.warnLong(this, e, null);
         }
         base.delete();
         return !base.exists();
@@ -147,13 +167,13 @@ public class KollektivMember extends Actor<KollektivMember> {
             if ( actorAppBundle != null ) {
                 actorAppBundle.getActors().forEach(actor -> actor.$stop());
             }
-            File base = new File( options.getTmpDirectory() + File.separator + bundle.getName());
+            File base = new File( options.getTmpDirectory() + File.separator + nodeId+File.separator+bundle.getName());
             int count = 0;
             while ( ! tryDelRecursive(base) ) {
-                base = new File( options.getTmpDirectory() + File.separator + bundle.getName() + count++);
+                base = new File( base.getParent() + File.separator + bundle.getName()+"_"+ count++);
             }
             base.mkdirs();
-            System.out.println("define name space " + bundle.getName() + " size " + bundle.getSizeKB()+" filebase:"+base.getAbsolutePath());
+            Log.Info(this,"define name space " + bundle.getName() + " size " + bundle.getSizeKB()+" filebase:"+base.getAbsolutePath());
             final File finalBase = base;
             bundle.getResources().entrySet().forEach(entry -> {
                 if (entry.getKey().endsWith(".jar")) {
@@ -184,7 +204,6 @@ public class KollektivMember extends Actor<KollektivMember> {
             }
             bundle.setLoader(memberClassLoader);
             apps.put(bundle.getName(), bundle);
-            System.out.println(".. done");
         } catch (MalformedURLException e) {
             e.printStackTrace();
         }
@@ -195,7 +214,7 @@ public class KollektivMember extends Actor<KollektivMember> {
         @Parameter( names = {"-c","-cores"}, description = "specify how many cores should be available. (Defaults to number of cores reported by OS).")
         int availableProcessors = Runtime.getRuntime().availableProcessors();
         @Parameter( names = {"-n", "-name"}, description = "optionally specify a symbolic name which can be used as a hint from the master process.")
-        String name;
+        String name = "Node";
         @Parameter( names = { "-t", "-tmp"}, description = "specify temporary directory to deploy downloaded classes/jars. Defaults to /tmp")
         String tmpDirectory = "/tmp";
         @Parameter( names = {"-m", "-master"}, description = "define master addr:port. Defaults to 127.0.0.1:3456")
@@ -245,10 +264,10 @@ public class KollektivMember extends Actor<KollektivMember> {
             System.exit(-1);
         }
 
-        System.out.println("starting kollectiv member with "+options );
+        Log.Lg.$setSeverity(Log.WARN);
+        System.out.println("starting kollektiv member with "+options );
         KollektivMember sl = Actors.AsActor(KollektivMember.class);
         sl.$init(options);
-        sl.$refDisconnected(null,null);
     }
 
 }

@@ -24,18 +24,25 @@ public class MemberDescription implements Serializable {
     public MemberDescription( KollektivMember memberRef, String nodeId, int allowedCores) {
         this.nodeId = nodeId;
         this.member = memberRef;
+        host = findHost();
+        numCores = allowedCores;
+        classpath = System.getProperty("java.class.path").replace(File.pathSeparator,":;:").replace("\\","/");
+    }
+
+    public static String findHost() {
+        String hname = "?";
         try {
-            host = InetAddress.getLocalHost().getHostName();
+            hname = InetAddress.getLocalHost().getHostName();
         } catch (UnknownHostException e) {
-            host = System.getenv("COMPUTERNAME");
-            if (host == null)
-                host = System.getenv("HOSTNAME");
-            if ( host == null ) {
+            hname = System.getenv("COMPUTERNAME");
+            if (hname == null)
+                hname = System.getenv("HOSTNAME");
+            if ( hname == null ) {
                 try {
                     Process proc = Runtime.getRuntime().exec("hostname");
                     try (InputStream stream = proc.getInputStream()) {
                         try (Scanner s = new Scanner(stream).useDelimiter("\\A")) {
-                            host = s.hasNext() ? s.next() : "UNKNOWN";
+                            hname = s.hasNext() ? s.next() : "UNKNOWN";
                         }
                     }
                 } catch (IOException e1) {
@@ -43,8 +50,7 @@ public class MemberDescription implements Serializable {
                 }
             }
         }
-        numCores = allowedCores;
-        classpath = System.getProperty("java.class.path").replace(File.pathSeparator,":;:").replace("\\","/");
+        return hname;
     }
 
     /**
