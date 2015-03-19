@@ -1,15 +1,10 @@
 package kollektiv;
 
-import com.sun.org.apache.xpath.internal.SourceTree;
 import org.nustaq.kollektiv.KollektivMaster;
-import org.nustaq.kontraktor.Actor;
-import org.nustaq.kontraktor.Actors;
-import org.nustaq.kontraktor.Future;
-import org.nustaq.kontraktor.Promise;
-import org.nustaq.kontraktor.remoting.tcp.TCPActorServer;
+import org.nustaq.kontraktor.*;
 import org.nustaq.kontraktor.util.Log;
 
-import java.util.concurrent.locks.LockSupport;
+import java.util.HashMap;
 
 /**
  * Created by ruedi on 07/03/15.
@@ -17,10 +12,10 @@ import java.util.concurrent.locks.LockSupport;
 public class TestActor extends Actor<TestActor> {
 
     KollektivMaster master;
+    HashMap aMap = new HashMap();
 
     public void $init(KollektivMaster master) {
         this.master = master;
-        delayed( 2000, () -> self().$showMembers() );
     }
 
     public Future<String> $method(String s) {
@@ -32,11 +27,17 @@ public class TestActor extends Actor<TestActor> {
         return new Promise<>(time);
     }
 
-    public void $showMembers() {
+    public void $onMap( Spore<HashMap,Object> spore ) {
+        System.out.println("Starting spore ..");
+        spore.remote(aMap);
+    }
+
+    public void $showMembers(int count) {
         master.$getMembers( (r,e) -> {
-            Log.Lg.info(this, "" + r);
+            Log.Info(this, "" + r);
         });
-        delayed(2000, () -> self().$showMembers());
+        if ( count > 0 )
+            delayed(2000, () -> self().$showMembers(count-1));
     }
 
     public static void main(String arg[]) throws Exception {
@@ -45,21 +46,30 @@ public class TestActor extends Actor<TestActor> {
 
         master.$onMemberAdd(description -> {
             master.$run(TestActor.class, "Hello")
-                .onResult(testAct -> {
-                    testAct.$method("ei ei from "+description.getNodeId()).onResult(r -> System.out.println(r)).onError( e -> System.out.println("ERROR "+e));
-                    for (int i = 0; i < 10; i++) {
-                        try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
+                    .onResult(testAct -> {
+                        testAct.$init(master);
+                        testAct.$method("ei ei from " + description.getNodeId()).onResult(r -> System.out.println(r)).onError(e -> System.out.println("ERROR " + e));
+                        for (int i = 0; i < 10; i++) {
+                            testAct.$roundtrip(System.currentTimeMillis()).onResult(r -> System.out.println("from " + description.getNodeId() + " " + (System.currentTimeMillis() - r)));
                         }
-                        testAct.$roundtrip(System.currentTimeMillis()).onResult( r -> System.out.println("from "+description.getNodeId()+" "+(System.currentTimeMillis()-r)));
-                    }
-                })
-                .onError(err -> { System.out.println("error during start "+err+" from "+description.getNodeId());
-                    if ( err instanceof Throwable )
-                        ((Throwable) err).printStackTrace();
-                });
+//                    Log.Warn(null,"some warning");
+//                        testAct.$showMembers(2);
+                        testAct.$onMap(new Spore<HashMap, Object>() {
+                            @Override
+                            public void remote(HashMap input) {
+                                for (int i = 0; i < 1000000; i++) {
+                                    input.put(i, "String " + i);
+                                }
+                                local(input.size(), null);
+                            }
+                        }.then( (res, err) -> System.out.println("Spore returned "+res))
+                        );
+                    })
+                    .onError(err -> {
+                        System.out.println("error during start " + err + " from " + description.getNodeId());
+                        if (err instanceof Throwable)
+                            ((Throwable) err).printStackTrace();
+                    });
             return false;
         });
     }

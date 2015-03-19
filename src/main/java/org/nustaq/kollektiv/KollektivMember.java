@@ -173,7 +173,7 @@ public class KollektivMember extends Actor<KollektivMember> {
                 base = new File( base.getParent() + File.separator + bundle.getName()+"_"+ count++);
             }
             base.mkdirs();
-            Log.Info(this,"define name space " + bundle.getName() + " size " + bundle.getSizeKB()+" filebase:"+base.getAbsolutePath());
+            localLog.warn(this,"define name space " + bundle.getName() + " size " + bundle.getSizeKB()+" filebase:"+base.getAbsolutePath());
             final File finalBase = base;
             bundle.getResources().entrySet().forEach(entry -> {
                 if (entry.getKey().endsWith(".jar")) {
