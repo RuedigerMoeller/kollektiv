@@ -255,6 +255,10 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         return res;
     }
 
+    public <T extends Actor> Future<T> $runOrAquire( Class<T> actorClass, String nameSpace) {
+        return null;
+    }
+
     public void $getMembers( Callback<MemberDescription> cb ) {
         members.forEach( member -> cb.receive(member,CONT) );
         cb.receive(null, FINSILENT);
