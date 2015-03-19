@@ -48,7 +48,7 @@ public class List {
 
         System.out.println("start listening for members on "+options);
 
-        KollektivMaster master = KollektivMaster.Start(3456);
+        KollektivMaster master = KollektivMaster.Start(options.port);
         System.out.println("server started");
 
         System.out.println();

@@ -34,38 +34,33 @@ public class TestActor extends Actor<TestActor> {
 
     public void $showMembers() {
         master.$getMembers( (r,e) -> {
-            Log.Lg.info( this, ""+r );
+            Log.Lg.info(this, "" + r);
         });
         delayed(2000, () -> self().$showMembers());
     }
 
     public static void main(String arg[]) throws Exception {
 
-        KollektivMaster master = KollektivMaster.Start(3456);
+        KollektivMaster master = KollektivMaster.Start(8080);
 
-        master.$onMemberMoreThan(1).then(() -> {
-            System.out.println("starting remote actor");
+        master.$onMemberAdd(description -> {
             master.$run(TestActor.class, "Hello")
-                .onError(e -> System.out.println(e))
-                .onResult(act -> {
-                    TestActor tact = (TestActor) act;
-                    System.out.println(".. remote actor started: "+tact);
-                    tact.$init(master);
-                    tact.$method("Höö").onResult(res -> System.out.println(res));
-                    new Thread( () -> {
-                        int count = 0;
-                        while( true && ! tact.isStopped() ) {
-                            count++;
-                            final int finalCount = count;
-                            tact.$roundtrip(System.nanoTime()).onResult( l -> {
-                                if ( finalCount%10000 == 0 ) {
-                                    System.out.println(System.nanoTime() - l);
-                                }
-                            });
-                            LockSupport.parkNanos(1000*100); // 1 ms
+                .onResult(testAct -> {
+                    testAct.$method("ei ei from "+description.getNodeId()).onResult(r -> System.out.println(r)).onError( e -> System.out.println("ERROR "+e));
+                    for (int i = 0; i < 10; i++) {
+                        try {
+                            Thread.sleep(1000);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
                         }
-                    }).start();
+                        testAct.$roundtrip(System.currentTimeMillis()).onResult( r -> System.out.println("from "+description.getNodeId()+" "+(System.currentTimeMillis()-r)));
+                    }
+                })
+                .onError(err -> { System.out.println("error during start "+err+" from "+description.getNodeId());
+                    if ( err instanceof Throwable )
+                        ((Throwable) err).printStackTrace();
                 });
+            return false;
         });
     }
 

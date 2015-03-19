@@ -200,13 +200,17 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         Log.Info(this, "member disconnected " + closedActor + " members remaining:" + members.size());
     }
 
+    /**
+     * called on each member add until true is returned from given closure (true means unregister listener)
+     * @param md
+     */
     public void $onMemberAdd(Function<MemberDescription,Boolean> md) {
         triggers.add(new ListTrigger(description -> md.apply(description), ListTrigger.ADD));
         members.forEach( member -> evaluateTriggers( ListTrigger.ADD, member ));
     }
 
     public void $onMemberRem(Function<MemberDescription,Boolean> md) {
-        triggers.add(new ListTrigger( description -> md.apply(description), ListTrigger.REM) );
+        triggers.add(new ListTrigger(description -> md.apply(description), ListTrigger.REM));
     }
 
     /**
@@ -240,7 +244,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         }).collect(Collectors.toList());
     }
 
-    public Future<Actor> $run(Class actorClass, String nameSpace) {
+    public <T extends Actor> Future<T> $run( Class<T> actorClass, String nameSpace) {
         if ( members.size() == 0 ) {
             return new Promise<>(null,"no members available");
         }
