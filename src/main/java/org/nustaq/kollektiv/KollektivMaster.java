@@ -244,12 +244,12 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         }).collect(Collectors.toList());
     }
 
-    public <T extends Actor> Future<T> $run( Class<T> actorClass, String nameSpace) {
+    public <T extends Actor> Future<T> $run( Class<T> actorClass) {
         if ( members.size() == 0 ) {
             return new Promise<>(null,"no members available");
         }
         Promise res = new Promise<>();
-        members.get(0).getMember().$run(actorClass.getName(), nameSpace).then((r, e) -> {
+        members.get(0).getMember().$run(actorClass.getName()).then((r, e) -> {
             res.receive(r, e);
         });
         return res;

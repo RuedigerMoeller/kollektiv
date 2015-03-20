@@ -1,9 +1,6 @@
 package org.nustaq.kollektiv;
 
-import org.nustaq.kontraktor.Actor;
-import org.nustaq.kontraktor.Actors;
-import org.nustaq.kontraktor.Future;
-import org.nustaq.kontraktor.Promise;
+import org.nustaq.kontraktor.*;
 import org.nustaq.kontraktor.remoting.tcp.TCPActorClient;
 import org.nustaq.kontraktor.util.Log;
 
@@ -29,7 +26,7 @@ public class KollektivMember extends Actor<KollektivMember> {
     public static final int RETRY_INTERVAL_MILLIS = 1000;
     KollektivMaster master;
     String nodeId;
-    HashMap<String, ActorAppBundle> apps = new HashMap<>();
+    ActorAppBundle app;
     MasterDescription masterDescription;
 
     Options options;
@@ -118,11 +115,15 @@ public class KollektivMember extends Actor<KollektivMember> {
 
     }
 
-    public Future<Actor> $run(String clazzname, String nameSpace) {
+    public Future<Actor> $run(String clazzname) {
         Promise res = new Promise();
         try {
-            ActorAppBundle actorAppBundle = apps.get(nameSpace);
+            ActorAppBundle actorAppBundle = app;
             MemberClassLoader loader = actorAppBundle.getLoader();
+
+            final RemoteConnection peek = master.__connections.peek();
+            peek.setClassLoader(loader);
+
             Class<?> actorClazz = loader.loadClass(clazzname);
             Class<?> bootstrap = loader.loadClass(ActorBootstrap.class.getName());
             Object actorBS = bootstrap.getConstructor(Class.class).newInstance(actorClazz);
@@ -163,7 +164,7 @@ public class KollektivMember extends Actor<KollektivMember> {
 
     public Future $defineNameSpace( ActorAppBundle bundle ) {
         try {
-            ActorAppBundle actorAppBundle = apps.get(bundle.getName());
+            ActorAppBundle actorAppBundle = app;
             if ( actorAppBundle != null ) {
                 actorAppBundle.getActors().forEach(actor -> actor.$stop());
             }
@@ -203,7 +204,7 @@ public class KollektivMember extends Actor<KollektivMember> {
                 }
             }
             bundle.setLoader(memberClassLoader);
-            apps.put(bundle.getName(), bundle);
+            app = bundle;
         } catch (MalformedURLException e) {
             e.printStackTrace();
         }

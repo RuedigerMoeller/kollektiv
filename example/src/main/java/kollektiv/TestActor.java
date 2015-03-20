@@ -28,7 +28,6 @@ public class TestActor extends Actor<TestActor> {
     }
 
     public void $onMap( Spore<HashMap,Object> spore ) {
-        System.out.println("Starting spore ..");
         spore.remote(aMap);
     }
 
@@ -42,34 +41,42 @@ public class TestActor extends Actor<TestActor> {
 
     public static void main(String arg[]) throws Exception {
 
-        KollektivMaster master = KollektivMaster.Start(8080);
+        KollektivMaster master = KollektivMaster.Start(3456);
 
         master.$onMemberAdd(description -> {
-            master.$run(TestActor.class, "Hello")
-                    .onResult(testAct -> {
-                        testAct.$init(master);
-                        testAct.$method("ei ei from " + description.getNodeId()).onResult(r -> System.out.println(r)).onError(e -> System.out.println("ERROR " + e));
-                        for (int i = 0; i < 10; i++) {
-                            testAct.$roundtrip(System.currentTimeMillis()).onResult(r -> System.out.println("from " + description.getNodeId() + " " + (System.currentTimeMillis() - r)));
-                        }
-//                    Log.Warn(null,"some warning");
-//                        testAct.$showMembers(2);
-                        testAct.$onMap(new Spore<HashMap, Object>() {
+            master.$run(TestActor.class)
+                .onResult(testAct -> {
+                    testAct.$init(master);
+                    testAct.$method("ei ei from " + description.getNodeId()).onResult(r -> System.out.println(r)).onError(e -> System.out.println("ERROR " + e));
+                    for (int i = 0; i < 10; i++) {
+                        testAct.$roundtrip(System.currentTimeMillis()).onResult(r -> System.out.println("from " + description.getNodeId() + " " + (System.currentTimeMillis() - r)));
+                    }
+                    testAct.$onMap(new Spore<HashMap, Object>() {
                             @Override
                             public void remote(HashMap input) {
                                 for (int i = 0; i < 1000000; i++) {
                                     input.put(i, "String " + i);
                                 }
-                                local(input.size(), null);
+                                returnResult(input.size(), null);
                             }
-                        }.then( (res, err) -> System.out.println("Spore returned "+res))
-                        );
-                    })
-                    .onError(err -> {
-                        System.out.println("error during start " + err + " from " + description.getNodeId());
-                        if (err instanceof Throwable)
-                            ((Throwable) err).printStackTrace();
-                    });
+                        }.then((res, err) -> System.out.println("Spore returned " + res))
+                    );
+                    testAct.$onMap(new Spore<HashMap, Object>() {
+                            @Override
+                            public void remote(HashMap input) {
+                                for (int i = 0; i < 10; i++) {
+                                    stream(input.get(i));
+                                }
+                                finished();
+                            }
+                        }.then((res, err) -> System.out.println("Spore streamed " + res))
+                    );
+                })
+                .onError(err -> {
+                    System.out.println("error during start " + err + " from " + description.getNodeId());
+                    if (err instanceof Throwable)
+                        ((Throwable) err).printStackTrace();
+                });
             return false;
         });
     }
