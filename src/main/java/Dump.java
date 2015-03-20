@@ -2,15 +2,21 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.nustaq.kollektiv.KollektivMaster;
 import org.nustaq.kollektiv.MemberDescription;
+import org.nustaq.kontraktor.Actor;
+import org.nustaq.kontraktor.Actors;
 import org.nustaq.kontraktor.util.Log;
+
+import java.util.List;
 
 /**
  * Created by ruedi on 16/03/15.
  */
-public class List {
+public class Dump {
 
     @Parameter(names={"-p","-port"}, description = "define the port serving on")
     int port = 3456;
+    @Parameter(names={"-s","-stopActors"}, description = "send a signal to all members to stop any hosted actor")
+    boolean stop = false;
     @Parameter(names={"-r","-reboot"}, description = "send a signal to all members to attempt a restart")
     boolean reboot = false;
     @Parameter(names={"-changeMaster", "-cm"}, description = "change the address of the master members try to connect. Careful, a wrong host:port string can make members unreachable forever ..")
@@ -30,7 +36,7 @@ public class List {
     }
 
     public static void main( String a[] ) throws Exception {
-        List options = new List();
+        Dump options = new Dump();
         JCommander com = new JCommander();
         com.addObject(options);
         try {
@@ -52,8 +58,11 @@ public class List {
         System.out.println("server started");
 
         System.out.println();
-        master.$onMemberAdd( (member) -> {
+        master.$onMemberAdd( member -> {
             System.out.println("Member added "+member);
+            if ( options.stop ) {
+                member.getMember().$shutdownAllActors();
+            }
             return false;
         });
         master.$onMemberRem((member) -> {
@@ -68,7 +77,10 @@ public class List {
         System.out.println("Summary");
         System.out.println("=======");
         System.out.println("Members("+members.size()+"):");
-        members.forEach(member -> System.out.println(member));
+        members.forEach(member -> {
+            System.out.println(member);
+            Actors.sync(member.getMember().$allActorNames()).forEach( actorDescription -> System.out.println( "  "+actorDescription ));
+        });
 
         System.exit(-1);
     }

@@ -14,7 +14,10 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import com.beust.jcommander.*;
 
@@ -24,6 +27,7 @@ import com.beust.jcommander.*;
 public class KollektivMember extends Actor<KollektivMember> {
 
     public static final int RETRY_INTERVAL_MILLIS = 1000;
+    public static final String SHUTDOWN = "Shutdown";
     KollektivMaster master;
     String nodeId;
     ActorAppBundle app;
@@ -31,10 +35,11 @@ public class KollektivMember extends Actor<KollektivMember> {
 
     Options options;
     Log localLog;
+    List<Actor> actors = new ArrayList<>();
 
     public void $init(Options options) {
         this.options = options;
-        nodeId = options.getName()+"_"+MemberDescription.findHost()+(System.nanoTime()&0xffff)+(int)(Math.random()*99);
+        nodeId = options.getName()+"_"+MemberDescription.findHost()+"_"+Integer.toHexString((int)(System.currentTimeMillis()&0xffff));
         localLog = Actors.AsActor(Log.class,100000);
         localLog.$setSeverity(Log.WARN);
         $startHB();
@@ -64,21 +69,21 @@ public class KollektivMember extends Actor<KollektivMember> {
                             masterDescription = md;
                             tryConnect = false;
                             Log.Lg.$setLogWrapper(
-                                    (Thread t, int severity, Object source, Throwable ex, String msg) -> {
-                                        String exString = null;
-                                        if (ex != null) {
-                                            StringWriter sw = new StringWriter();
-                                            PrintWriter pw = new PrintWriter(sw);
-                                            ex.printStackTrace(pw);
-                                            exString = sw.toString();
-                                        }
-                                        if (actor.isStopped()) {
-                                            if (Log.Lg.getSeverity() <= severity )
-                                                Log.Lg.defaultLogger.msg(t, severity, source, ex, msg);
-                                        } else {
-                                            actor.$remoteLog(severity, nodeId + "[" + source + "]", exString == null ? msg : msg + "\n" + exString);
-                                        }
+                                (Thread t, int severity, Object source, Throwable ex, String msg) -> {
+                                    String exString = null;
+                                    if (ex != null) {
+                                        StringWriter sw = new StringWriter();
+                                        PrintWriter pw = new PrintWriter(sw);
+                                        ex.printStackTrace(pw);
+                                        exString = sw.toString();
                                     }
+                                    if (actor.isStopped()) {
+                                        if (Log.Lg.getSeverity() <= severity )
+                                            Log.Lg.defaultLogger.msg(t, severity, source, ex, msg);
+                                    } else {
+                                        actor.$remoteLog(severity, nodeId + "[" + source + "]", exString == null ? msg : msg + "\n" + exString);
+                                    }
+                                }
                             );
                             Log.Lg.warn(this, " start logging from " + nodeId);
                             delayed(1000, () -> self().$startHB());
@@ -89,7 +94,7 @@ public class KollektivMember extends Actor<KollektivMember> {
                     delayed(RETRY_INTERVAL_MILLIS, () -> self().$startHB());
                 });
             } catch (IOException e) {
-                localLog.warn(this,"could not connect "+e);
+                localLog.warn(this, "could not connect " + e);
             }
         } else {
             master.$heartbeat(nodeId);
@@ -101,6 +106,7 @@ public class KollektivMember extends Actor<KollektivMember> {
         if ( disconnectedRef == master ) {
             Log.Lg.resetToSysout();
             master = null;
+            app = null;
         }
         localLog.warn(this, "actor disconnected " + disconnectedRef + " address:" + address);
     }
@@ -129,13 +135,17 @@ public class KollektivMember extends Actor<KollektivMember> {
             Object actorBS = bootstrap.getConstructor(Class.class).newInstance(actorClazz);
             Field f = actorBS.getClass().getField("actor");
             Actor resAct = (Actor) f.get(actorBS);
-            actorAppBundle.addActor(resAct);
+            addActor(resAct);
             res.receive(resAct,null);
         } catch (Exception e) {
             e.printStackTrace();
             res.receive(null,e);
         }
         return res;
+    }
+
+    private void addActor(Actor resAct) {
+        actors.add(resAct);
     }
 
     private boolean tryDelRecursive(File base) {
@@ -162,19 +172,40 @@ public class KollektivMember extends Actor<KollektivMember> {
         return !base.exists();
     }
 
+    private void filterLiveActors() {
+        actors = actors.stream().filter( actor -> !actor.isStopped() ).collect(Collectors.toList());
+    }
+
+    public void $sendToAllActors( Object message ) {
+        filterLiveActors();
+        actors.forEach(actor -> actor.$receive(message));
+    }
+
+    public void $shutdownAllActors() {
+        filterLiveActors();
+        $sendToAllActors(SHUTDOWN);
+        actors.forEach( a -> a.$stop() );
+    }
+
+    public Future<List<Actor>> $allActors() {
+        return new Promise<>(new ArrayList<>(actors));
+    }
+
+    public Future<List<ActorDescription>> $allActorNames() {
+        filterLiveActors();
+        return new Promise<>(actors.stream().map( in -> new ActorDescription(self()) ).collect(Collectors.toList()) );
+    }
+
     public Future $defineNameSpace( ActorAppBundle bundle ) {
         try {
             ActorAppBundle actorAppBundle = app;
-            if ( actorAppBundle != null ) {
-                actorAppBundle.getActors().forEach(actor -> actor.$stop());
-            }
             File base = new File( options.getTmpDirectory() + File.separator + nodeId+File.separator+bundle.getName());
             int count = 0;
             while ( ! tryDelRecursive(base) ) {
                 base = new File( base.getParent() + File.separator + bundle.getName()+"_"+ count++);
             }
             base.mkdirs();
-            localLog.warn(this,"define name space " + bundle.getName() + " size " + bundle.getSizeKB()+" filebase:"+base.getAbsolutePath());
+            localLog.warn(this, "define name space " + bundle.getName() + " size " + bundle.getSizeKB() + " filebase:" + base.getAbsolutePath());
             final File finalBase = base;
             bundle.getResources().entrySet().forEach(entry -> {
                 if (entry.getKey().endsWith(".jar")) {

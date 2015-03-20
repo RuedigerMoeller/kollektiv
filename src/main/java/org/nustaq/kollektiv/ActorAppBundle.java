@@ -15,7 +15,6 @@ import java.util.*;
  */
 public class ActorAppBundle implements Serializable {
 
-
     public static class CPEntry implements Serializable {
         byte bytes[];
         String name;
@@ -28,7 +27,6 @@ public class ActorAppBundle implements Serializable {
 
     String name;
     HashMap<String,CPEntry> resources = new HashMap<>();
-    List<Actor> actors = new ArrayList<>();
 
     transient String baseDir;
     transient MemberClassLoader loader;
@@ -51,14 +49,6 @@ public class ActorAppBundle implements Serializable {
 
     public void setResources(HashMap<String, CPEntry> resources) {
         this.resources = resources;
-    }
-
-    public void addActor(Actor act) {
-        actors.add(act);
-    }
-
-    public List<Actor> getActors() {
-        return actors;
     }
 
     public HashMap<String, CPEntry> getResources() {
