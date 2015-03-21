@@ -1,11 +1,15 @@
 package org.nustaq.kollektiv;
 
+import org.nustaq.kontraktor.Actor;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 
 /**
@@ -20,6 +24,8 @@ public class MemberDescription implements Serializable {
     KollektivMember member;
     String classpath;
     transient long lastHB = System.currentTimeMillis();
+
+    List<Actor> remotedActors = new ArrayList<>();
 
     public MemberDescription( KollektivMember memberRef, String nodeId, int allowedCores) {
         this.nodeId = nodeId;
@@ -99,5 +105,12 @@ public class MemberDescription implements Serializable {
 
     public void updateHeartbeat() {
         lastHB = System.currentTimeMillis();
+    }
+
+    /**
+     * @return a list of active actors on the member.
+     */
+    public List<Actor> getRemotedActors() {
+        return remotedActors;
     }
 }

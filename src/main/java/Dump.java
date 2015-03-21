@@ -1,12 +1,10 @@
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import org.nustaq.kollektiv.ConnectionType;
 import org.nustaq.kollektiv.KollektivMaster;
 import org.nustaq.kollektiv.MemberDescription;
-import org.nustaq.kontraktor.Actor;
 import org.nustaq.kontraktor.Actors;
 import org.nustaq.kontraktor.util.Log;
-
-import java.util.List;
 
 /**
  * Created by ruedi on 16/03/15.
@@ -54,7 +52,7 @@ public class Dump {
 
         System.out.println("start listening for members on "+options);
 
-        KollektivMaster master = KollektivMaster.Start(options.port);
+        KollektivMaster master = KollektivMaster.Start(options.port, ConnectionType.Passive );
         System.out.println("server started");
 
         System.out.println();

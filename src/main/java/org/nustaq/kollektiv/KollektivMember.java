@@ -1,6 +1,7 @@
 package org.nustaq.kollektiv;
 
 import org.nustaq.kontraktor.*;
+import org.nustaq.kontraktor.annotations.CallerSideMethod;
 import org.nustaq.kontraktor.remoting.tcp.TCPActorClient;
 import org.nustaq.kontraktor.util.Log;
 
@@ -15,7 +16,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -28,6 +28,8 @@ public class KollektivMember extends Actor<KollektivMember> {
 
     public static final int RETRY_INTERVAL_MILLIS = 1000;
     public static final String SHUTDOWN = "Shutdown";
+    public static final int HB_MILLIS = 1000;
+
     KollektivMaster master;
     String nodeId;
     ActorAppBundle app;
@@ -40,13 +42,13 @@ public class KollektivMember extends Actor<KollektivMember> {
     public void $init(Options options) {
         this.options = options;
         nodeId = options.getName()+"_"+MemberDescription.findHost()+"_"+Integer.toHexString((int)(System.currentTimeMillis()&0xffff));
-        localLog = Actors.AsActor(Log.class,100000);
+        localLog = Actors.AsActor(Log.class,10000);
         localLog.$setSeverity(Log.WARN);
-        $startHB();
+        $connectLoop();
     }
 
     boolean tryConnect = false;
-    public void $startHB() {
+    public void $connectLoop() {
         checkThread();
         String s = options.getMasterAddr();
         if ( master == null ) {
@@ -68,47 +70,53 @@ public class KollektivMember extends Actor<KollektivMember> {
                         .onResult(md -> {
                             masterDescription = md;
                             tryConnect = false;
-                            Log.Lg.$setLogWrapper(
-                                (Thread t, int severity, Object source, Throwable ex, String msg) -> {
-                                    String exString = null;
-                                    if (ex != null) {
-                                        StringWriter sw = new StringWriter();
-                                        PrintWriter pw = new PrintWriter(sw);
-                                        ex.printStackTrace(pw);
-                                        exString = sw.toString();
-                                    }
-                                    if (actor.isStopped()) {
-                                        if (Log.Lg.getSeverity() <= severity )
-                                            Log.Lg.defaultLogger.msg(t, severity, source, ex, msg);
-                                    } else {
-                                        actor.$remoteLog(severity, nodeId + "[" + source + "]", exString == null ? msg : msg + "\n" + exString);
-                                    }
-                                }
-                            );
-                            Log.Lg.warn(this, " start logging from " + nodeId);
-                            delayed(1000, () -> self().$startHB());
+                            if ( options.remoteLog ) {
+                                Log.Lg.$setLogWrapper(
+                                     (Thread t, int severity, Object source, Throwable ex, String msg) -> {
+                                         String exString = null;
+                                         if (ex != null) {
+                                             StringWriter sw = new StringWriter();
+                                             PrintWriter pw = new PrintWriter(sw);
+                                             ex.printStackTrace(pw);
+                                             exString = sw.toString();
+                                         }
+                                         if (actor.isStopped()) {
+                                             if (Log.Lg.getSeverity() <= severity)
+                                                 Log.Lg.defaultLogger.msg(t, severity, source, ex, msg);
+                                         } else {
+                                             actor.$remoteLog(severity, nodeId + "[" + source + "]", exString == null ? msg : msg + "\n" + exString);
+                                         }
+                                     }
+                                );
+                                Log.Lg.warn(this, " start logging from " + nodeId);
+                            }
+                        })
+                        .onError( err -> {
+                            tryConnect = false;
+                            master = null;
+                            localLog.Warn(this, "registering failed "+err);
                         });
                 })
                 .onError(err -> {
                     localLog.info(this,"failed to connect " + s);
-                    delayed(RETRY_INTERVAL_MILLIS, () -> self().$startHB());
                 });
-            } catch (IOException e) {
+            } catch (Exception e) {
+                tryConnect = false;
+                master = null;
                 localLog.warn(this, "could not connect " + e);
             }
         } else {
             master.$heartbeat(nodeId);
-            delayed(1000, () -> self().$startHB());
         }
+        delayed(HB_MILLIS, () -> self().$connectLoop());
     }
 
     public void $refDisconnected(String address, Actor disconnectedRef) {
         if ( disconnectedRef == master ) {
             Log.Lg.resetToSysout();
             master = null;
-            app = null;
         }
-        localLog.warn(this, "actor disconnected " + disconnectedRef + " address:" + address);
+        localLog.warn(this, "actor disconnected " + disconnectedRef + " address:" + address + " master: "+master );
     }
 
     public static class ActorBootstrap {
@@ -142,10 +150,6 @@ public class KollektivMember extends Actor<KollektivMember> {
             res.receive(null,e);
         }
         return res;
-    }
-
-    private void addActor(Actor resAct) {
-        actors.add(resAct);
     }
 
     private boolean tryDelRecursive(File base) {
@@ -193,7 +197,16 @@ public class KollektivMember extends Actor<KollektivMember> {
 
     public Future<List<ActorDescription>> $allActorNames() {
         filterLiveActors();
-        return new Promise<>(actors.stream().map( in -> new ActorDescription(self()) ).collect(Collectors.toList()) );
+        return new Promise<>(actors.stream().map( in -> new ActorDescription(in) ).collect(Collectors.toList()) );
+    }
+
+    public Future $reconnect( KollektivMaster master ) {
+        if ( app == null ) {
+            return new Promise<>(null, new RuntimeException("member has no classdefinitions, but tries to reconnect."));
+        }
+        this.master = master;
+        master.__connections.peek().setClassLoader(app.getLoader());
+        return new Promise<>(null);
     }
 
     public Future $defineNameSpace( ActorAppBundle bundle ) {
@@ -251,6 +264,8 @@ public class KollektivMember extends Actor<KollektivMember> {
         String tmpDirectory = "/tmp";
         @Parameter( names = {"-m", "-master"}, description = "define master addr:port. Defaults to 127.0.0.1:3456")
         String masterAddr = "127.0.0.1:3456";
+        @Parameter( names = {"-rl", "remoteLog"}, description = "redirect logging to master node")
+        boolean remoteLog = false;
         @Parameter(names = {"-h","-help","-?", "--help"}, help = true, description = "display help")
         boolean help;
 
@@ -300,6 +315,14 @@ public class KollektivMember extends Actor<KollektivMember> {
         System.out.println("starting kollektiv member with "+options );
         KollektivMember sl = Actors.AsActor(KollektivMember.class);
         sl.$init(options);
+    }
+
+    // local methods
+
+    @CallerSideMethod public void addActor(Actor resAct) {
+        synchronized ( getActor().actors) {
+            getActor().actors.add(resAct);
+        }
     }
 
 }

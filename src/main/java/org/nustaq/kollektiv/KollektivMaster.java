@@ -11,7 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -20,9 +19,9 @@ import java.util.stream.Collectors;
  */
 public class KollektivMaster extends Actor<KollektivMaster> {
 
-    public static KollektivMaster Start( int port ) throws Exception {
+    public static KollektivMaster Start( int port, ConnectionType type ) throws Exception {
         KollektivMaster master = Actors.AsActor(KollektivMaster.class);
-        master.$init();
+        master.$init(type);
         TCPActorServer.Publish(master, port, closedActor -> master.$memberDisconnected(closedActor));
         return master;
     }
@@ -70,6 +69,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     }
 
     List<ListTrigger> triggers = new ArrayList<>();
+    ConnectionType connectionType;
 
     // shared state
     Map<String,MemberDescription> memberMap = new ConcurrentHashMap<>();
@@ -77,24 +77,54 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     List<MemberDescription> members;
     //..
 
-    public void $init() {
+    public void $init(ConnectionType type) {
         members = new ArrayList<>();
+        this.connectionType = type;
     }
 
     public Future<MasterDescription> $registerMember(MemberDescription sld) {
         Log.Info(this, "receive registration " + sld + " members:" + members.size() + 1);
-        addMember(sld);
-        sld.getMember().$defineNameSpace(getCachedBundle(sld.getClasspath())).then( (r,e) -> {
-            if ( e == null )
+        Promise p = new Promise();
+        if ( connectionType == ConnectionType.Reconnect ) {
+            sld.getMember().$reconnect(self())
+                .onError( err -> fullConnect(sld,p) )
+                .onResult( dummy -> {
+                    sld.getMember().$allActors().then((list, err) -> {
+                        if (err == null) {
+                            list.forEach(remoteactor -> sld.getRemotedActors().add(remoteactor));
+                            addMember(sld);
+                            p.receiveResult(new MasterDescription());
+                        } else {
+                            p.receiveError(err);
+                        }
+                    });
+                });
+        } else if ( connectionType == ConnectionType.Connect ) {
+            fullConnect(sld, p);
+        } else {
+            sld.getMember().$reconnect(self());
+            addMember(sld);
+            p.receiveResult(new MasterDescription());
+        }
+        return p;
+    }
+
+    void fullConnect(MemberDescription sld, Promise p) {
+        sld.getMember().$shutdownAllActors();
+        sld.getMember().$defineNameSpace(getCachedBundle(sld.getClasspath())).then( (r, e) -> {
+            if (e == null) {
                 Log.Info(this, "transfer COMPLETE: " + sld);
+                addMember(sld);
+                p.receive( new MasterDescription(), null );
+            }
             else {
-                if ( e instanceof Throwable ) {
-                    ((Throwable)e).printStackTrace();
+                if (e instanceof Throwable) {
+                    ((Throwable) e).printStackTrace();
                 }
                 Log.Info(this, "transfer FAILED: " + sld + " " + e);
+                p.receive(null,e);
             }
         });
-        return new Promise<>(new MasterDescription());
     }
 
     void addMember(MemberDescription sld) {
@@ -206,7 +236,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
      */
     public void $onMemberAdd(Function<MemberDescription,Boolean> md) {
         triggers.add(new ListTrigger(description -> md.apply(description), ListTrigger.ADD));
-        members.forEach( member -> evaluateTriggers( ListTrigger.ADD, member ));
+        members.forEach(member -> evaluateTriggers( ListTrigger.ADD, member ));
     }
 
     public void $onMemberRem(Function<MemberDescription,Boolean> md) {
@@ -244,19 +274,22 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         }).collect(Collectors.toList());
     }
 
-    public <T extends Actor> Future<T> $run( Class<T> actorClass) {
+    @CallerSideMethod public <T extends Actor> Future<T> $runOnDescription( MemberDescription description, Class<T> actorClass) {
+        return $run( description.getMember(), actorClass );
+    }
+
+    public <T extends Actor> Future<T> $run( KollektivMember member, Class<T> actorClass) {
         if ( members.size() == 0 ) {
             return new Promise<>(null,"no members available");
         }
         Promise res = new Promise<>();
-        members.get(0).getMember().$run(actorClass.getName()).then((r, e) -> {
+        member.$run(actorClass.getName()).then((r, e) -> {
+            if ( r != null ) {
+                member.addActor(member);
+            }
             res.receive(r, e);
         });
         return res;
-    }
-
-    public <T extends Actor> Future<T> $runOrAquire( Class<T> actorClass, String nameSpace) {
-        return null;
     }
 
     public void $getMembers( Callback<MemberDescription> cb ) {

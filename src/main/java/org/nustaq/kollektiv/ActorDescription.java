@@ -10,21 +10,14 @@ import java.io.Serializable;
  */
 public class ActorDescription implements Serializable {
 
-    int remoteId;
     String clazzName;
 
     public ActorDescription( Actor act ) {
-        remoteId = ((RemoteConnection)act.__connections.peek()).getRemoteId(act);
         clazzName = act.getActor().getClass().getName();
     }
 
     public ActorDescription(int remoteId, String clazzName) {
-        this.remoteId = remoteId;
         this.clazzName = clazzName;
-    }
-
-    public int getRemoteId() {
-        return remoteId;
     }
 
     public String getClazzName() {
@@ -34,8 +27,7 @@ public class ActorDescription implements Serializable {
     @Override
     public String toString() {
         return "ActorDescription{" +
-                "remoteId=" + remoteId +
-                ", clazzName='" + clazzName + '\'' +
+                "clazzName='" + clazzName + '\'' +
                 '}';
     }
 }

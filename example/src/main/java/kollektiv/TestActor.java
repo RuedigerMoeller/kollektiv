@@ -1,7 +1,10 @@
 package kollektiv;
 
+import org.nustaq.kollektiv.ConnectionType;
 import org.nustaq.kollektiv.KollektivMaster;
+import org.nustaq.kollektiv.MemberDescription;
 import org.nustaq.kontraktor.*;
+import org.nustaq.kontraktor.impl.DispatcherThread;
 import org.nustaq.kontraktor.util.Log;
 
 import java.util.HashMap;
@@ -39,46 +42,67 @@ public class TestActor extends Actor<TestActor> {
             delayed(2000, () -> self().$showMembers(count-1));
     }
 
+    static void runStuff(MemberDescription description, TestActor testAct) {
+        testAct.$method("ei ei from " + description.getNodeId()).onResult(r -> System.out.println(r)).onError(e -> System.out.println("ERROR " + e));
+        for (int i = 0; i < 10; i++) {
+            testAct.$roundtrip(System.currentTimeMillis()).onResult(r -> System.out.println("from " + description.getNodeId() + " " + (System.currentTimeMillis() - r)));
+        }
+        testAct.$onMap(new Spore<HashMap, Object>() {
+                @Override
+                public void remote(HashMap input) {
+                    for (int i = 0; i < 1000000; i++) {
+                        input.put(input.size(), "str " + input.size());
+                    }
+                    returnResult(input.size(), null);
+                }
+            }.then((res, err) -> System.out.println("Spore returned " + res))
+        );
+        testAct.$onMap(new Spore<HashMap, Object>() {
+                @Override
+                public void remote(HashMap input) {
+                    for (int i = 0; i < 10; i++) {
+                        stream(input.get(i));
+                    }
+                    finished();
+                }
+            }.then((res, err) -> System.out.println("Spore streamed " + res))
+        );
+    }
+
     public static void main(String arg[]) throws Exception {
 
-        KollektivMaster master = KollektivMaster.Start(3456);
+        DispatcherThread.DUMP_CATCHED = true; // ease diagnostics
 
-        master.$onMemberAdd(description -> {
-            master.$run(TestActor.class)
-                .onResult(testAct -> {
-                    testAct.$init(master);
-                    testAct.$method("ei ei from " + description.getNodeId()).onResult(r -> System.out.println(r)).onError(e -> System.out.println("ERROR " + e));
-                    for (int i = 0; i < 10; i++) {
-                        testAct.$roundtrip(System.currentTimeMillis()).onResult(r -> System.out.println("from " + description.getNodeId() + " " + (System.currentTimeMillis() - r)));
+        ConnectionType conT = ConnectionType.Reconnect;
+//        ConnectionType conT = ConnectionType.Connect;
+
+        KollektivMaster master = KollektivMaster.Start(3456,conT);
+
+        if ( conT == ConnectionType.Connect ) {
+            master.$onMemberAdd(description -> {
+                master.$run(description.getMember(),TestActor.class)
+                    .onResult( testAct -> {
+                        testAct.$init(master);
+                        runStuff(description, testAct);
+                    })
+                    .onError(err -> {
+                        System.out.println("error during start " + err + " from " + description.getNodeId());
+                        if (err instanceof Throwable)
+                            ((Throwable) err).printStackTrace();
+                    });
+                return false;
+            });
+        } else {
+            master.$onMemberAdd(description -> {
+                description.getRemotedActors().forEach(actor -> {
+                    if (actor instanceof TestActor) {
+                        TestActor testAct = (TestActor) actor;
+                        runStuff(description, testAct);
                     }
-                    testAct.$onMap(new Spore<HashMap, Object>() {
-                            @Override
-                            public void remote(HashMap input) {
-                                for (int i = 0; i < 1000000; i++) {
-                                    input.put(i, "String " + i);
-                                }
-                                returnResult(input.size(), null);
-                            }
-                        }.then((res, err) -> System.out.println("Spore returned " + res))
-                    );
-                    testAct.$onMap(new Spore<HashMap, Object>() {
-                            @Override
-                            public void remote(HashMap input) {
-                                for (int i = 0; i < 10; i++) {
-                                    stream(input.get(i));
-                                }
-                                finished();
-                            }
-                        }.then((res, err) -> System.out.println("Spore streamed " + res))
-                    );
-                })
-                .onError(err -> {
-                    System.out.println("error during start " + err + " from " + description.getNodeId());
-                    if (err instanceof Throwable)
-                        ((Throwable) err).printStackTrace();
                 });
-            return false;
-        });
+                return false;
+            });
+        }
     }
 
 }
