@@ -1,0 +1,1 @@
+highlights how spores can be used to process and query distributed data flexible and efficiently

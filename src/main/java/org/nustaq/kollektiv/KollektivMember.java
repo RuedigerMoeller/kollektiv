@@ -27,9 +27,13 @@ import com.beust.jcommander.*;
  */
 public class KollektivMember extends Actor<KollektivMember> {
 
-    public static final int RETRY_INTERVAL_MILLIS = 1000;
-    public static final String SHUTDOWN = "Shutdown";
-    public static final int HB_MILLIS = 1000;
+    public static int HB_MILLIS = 1000;
+    public static final int DEFAULT_PORT = 3456;
+
+
+    // messages passed to all hosted actors
+    public static final String SHUTDOWN = "Shutdown"; // node will shutdown
+    public static final String MASTER_LOST = "MasterLost"; // connection to master node lost
 
     KollektivMaster master;
     String nodeId;
@@ -91,10 +95,13 @@ public class KollektivMember extends Actor<KollektivMember> {
                                 );
                                 Log.Lg.warn(this, " start logging from " + nodeId);
                             }
+                            MasterConnectedMsg message = new MasterConnectedMsg(master);
+                            actors.forEach( act -> act.$receive(message) );
                         })
                         .onError( err -> {
                             tryConnect = false;
                             master = null;
+                            actors.forEach( act -> act.$receive(MASTER_LOST) );
                             localLog.Warn(this, "registering failed "+err);
                         });
                 })
@@ -104,6 +111,7 @@ public class KollektivMember extends Actor<KollektivMember> {
             } catch (Exception e) {
                 tryConnect = false;
                 master = null;
+                actors.forEach( actor -> actor.$receive(MASTER_LOST) );
                 localLog.warn(this, "could not connect " + e);
             }
         } else {
@@ -116,6 +124,7 @@ public class KollektivMember extends Actor<KollektivMember> {
         if ( disconnectedRef == master ) {
             Log.Lg.resetToSysout();
             master = null;
+            actors.forEach( actor -> actor.$receive(MASTER_LOST) );
         }
         localLog.warn(this, "actor disconnected " + disconnectedRef + " address:" + address + " master: "+master );
     }
@@ -144,7 +153,7 @@ public class KollektivMember extends Actor<KollektivMember> {
             Object actorBS = bootstrap.getConstructor(Class.class).newInstance(actorClazz);
             Field f = actorBS.getClass().getField("actor");
             Actor resAct = (Actor) f.get(actorBS);
-            addActor(resAct);
+            $addActor(resAct);
             res.receive(resAct,null);
         } catch (Exception e) {
             e.printStackTrace();
@@ -207,6 +216,8 @@ public class KollektivMember extends Actor<KollektivMember> {
         }
         this.master = master;
         master.__connections.peek().setClassLoader(app.getLoader());
+        MasterConnectedMsg msg = new MasterConnectedMsg(master);
+        actors.forEach( act -> act.$receive(msg));
         return new Promise<>(null);
     }
 
@@ -287,6 +298,9 @@ public class KollektivMember extends Actor<KollektivMember> {
         });
     }
 
+    public void $addActor(Actor resAct) {
+        getActor().actors.add(resAct);
+    }
 
     public static class Options {
         @Parameter( names = {"-c","-cores"}, description = "specify how many cores should be available. (Defaults to number of cores reported by OS).")
@@ -295,8 +309,8 @@ public class KollektivMember extends Actor<KollektivMember> {
         String name = "Node";
         @Parameter( names = { "-t", "-tmp"}, description = "specify temporary directory to deploy downloaded classes/jars. Defaults to /tmp")
         String tmpDirectory = "/tmp";
-        @Parameter( names = {"-m", "-master"}, description = "define master addr:port. Defaults to 127.0.0.1:3456")
-        String masterAddr = "127.0.0.1:3456";
+        @Parameter( names = {"-m", "-master"}, description = "define master addr:port. Defaults to 127.0.0.1:"+KollektivMember.DEFAULT_PORT)
+        String masterAddr = "127.0.0.1:"+KollektivMember.DEFAULT_PORT;
         @Parameter( names = {"-rl", "remoteLog"}, description = "redirect logging to master node")
         boolean remoteLog = false;
         @Parameter(names = {"-h","-help","-?", "--help"}, help = true, description = "display help")
@@ -347,22 +361,14 @@ public class KollektivMember extends Actor<KollektivMember> {
         }
 
         Log.Lg.$setSeverity(Log.WARN);
-        System.out.println(" __ __              _             \n" +
-                               "|  \\  \\ ___ ._ _ _ | |_  ___  _ _ \n" +
-                               "|     |/ ._>| ' ' || . \\/ ._>| '_>\n" +
-                               "|_|_|_|\\___.|_|_|_||___/\\___.|_|   of kollektiv" );
+        System.out.println("===================================");
+        System.out.println("==       kollektiv.MEMBER        ==");
+        System.out.println("===================================");
         System.out.println("");
         System.out.println("starting kollektiv member with "+options );
         KollektivMember sl = Actors.AsActor(KollektivMember.class);
         sl.$init(options);
     }
 
-    // local methods
-
-    @CallerSideMethod public void addActor(Actor resAct) {
-        synchronized ( getActor().actors) {
-            getActor().actors.add(resAct);
-        }
-    }
 
 }

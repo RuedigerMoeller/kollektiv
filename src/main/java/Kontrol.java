@@ -2,17 +2,19 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.nustaq.kollektiv.ConnectionType;
 import org.nustaq.kollektiv.KollektivMaster;
+import org.nustaq.kollektiv.KollektivMember;
 import org.nustaq.kollektiv.MemberDescription;
 import org.nustaq.kontraktor.Actors;
 import org.nustaq.kontraktor.util.Log;
 
 /**
- * Created by ruedi on 16/03/15.
+ * Control Utility which can act as a Master Node for a Kollektiv Cluster. Note that you can connect only if
+ * the Cluster's master node is not running.
  */
 public class Kontrol {
 
     @Parameter(names={"-p","-port"}, description = "define the port serving on")
-    int port = 3456;
+    int port = KollektivMember.DEFAULT_PORT;
     @Parameter(names={"-s","-stopActors"}, description = "send a signal to all members to stop any hosted actor")
     boolean stop = false;
     @Parameter(names={"-r","-reboot"}, description = "send a signal to all members to attempt a restart")
@@ -40,10 +42,10 @@ public class Kontrol {
     }
 
     public static void main( String a[] ) throws Exception {
-        System.out.println(
-                           " __  __  ____  __  _  _____ _____  ____  _    \n" +
-                           "|  |/  // () \\|  \\| ||_   _|| () )/ () \\| |__ \n" +
-                           "|__|\\__\\\\____/|_|\\__|  |_|  |_|\\_\\\\____/|____| kollektiv");
+
+        System.out.println("===================================");
+        System.out.println("==       kollektiv.KONTROL       ==");
+        System.out.println("===================================");
         Kontrol options = new Kontrol();
         JCommander com = new JCommander();
         com.addObject(options);
@@ -63,7 +65,7 @@ public class Kontrol {
         System.out.println();
         System.out.println("start listening for members on "+options);
 
-        KollektivMaster master = KollektivMaster.Start(options.port, ConnectionType.Passive );
+        KollektivMaster master = KollektivMaster.Start(options.port, ConnectionType.Passive, null );
         System.out.println("server started");
 
         master.$onMemberAdd( member -> {

@@ -2,6 +2,7 @@ package kollektiv;
 
 import org.nustaq.kollektiv.ConnectionType;
 import org.nustaq.kollektiv.KollektivMaster;
+import org.nustaq.kollektiv.KollektivMember;
 import org.nustaq.kollektiv.MemberDescription;
 import org.nustaq.kontraktor.*;
 import org.nustaq.kontraktor.impl.DispatcherThread;
@@ -77,7 +78,7 @@ public class TestActor extends Actor<TestActor> {
         ConnectionType conT = ConnectionType.Reconnect;
 //        ConnectionType conT = ConnectionType.Connect;
 
-        KollektivMaster master = KollektivMaster.Start(3456,conT);
+        KollektivMaster master = KollektivMaster.Start(KollektivMember.DEFAULT_PORT,conT, null);
 
         if ( conT == ConnectionType.Connect ) {
             master.$onMemberAdd(description -> {

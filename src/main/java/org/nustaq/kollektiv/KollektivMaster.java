@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -19,9 +20,9 @@ import java.util.stream.Collectors;
  */
 public class KollektivMaster extends Actor<KollektivMaster> {
 
-    public static KollektivMaster Start( int port, ConnectionType type ) throws Exception {
+    public static KollektivMaster Start( int port, ConnectionType type, Actor appProvided ) throws Exception {
         KollektivMaster master = Actors.AsActor(KollektivMaster.class);
-        master.$init(type);
+        master.$init(type,appProvided);
         TCPActorServer.Publish(master, port, closedActor -> master.$memberDisconnected(closedActor));
         return master;
     }
@@ -73,13 +74,15 @@ public class KollektivMaster extends Actor<KollektivMaster> {
 
     // shared state
     Map<String,MemberDescription> memberMap = new ConcurrentHashMap<>();
-    Map<String,MemberDescription> roleMap = new ConcurrentHashMap<>();
     List<MemberDescription> members;
     //..
 
-    public void $init(ConnectionType type) {
-        members = new ArrayList<>();
+    Actor customFacade; // application provided to allow talkback from member nodes to master
+
+    public void $init(ConnectionType type, Actor appProvided) {
+        members = Collections.synchronizedList(new ArrayList<MemberDescription>());
         this.connectionType = type;
+        this.customFacade = appProvided;
     }
 
     public Future<MasterDescription> $registerMember(MemberDescription sld) {
@@ -128,11 +131,9 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     }
 
     void addMember(MemberDescription sld) {
-        synchronized (members) {
-            members.add(sld);
-            memberMap.put(sld.getNodeId(), sld );
-            evaluateTriggers(ListTrigger.ADD, sld);
-        }
+        members.add(sld);
+        memberMap.put(sld.getNodeId(), sld );
+        evaluateTriggers(ListTrigger.ADD, sld);
     }
 
     boolean removeMember(Actor closedActor) {
@@ -143,15 +144,6 @@ public class KollektivMaster extends Actor<KollektivMaster> {
             {
                 memberMap.remove(next.getKey());
                 evaluateTriggers(ListTrigger.REM,next.getValue());
-                break;
-            }
-        }
-        for (Iterator<Map.Entry<String, MemberDescription>> iterator = roleMap.entrySet().iterator(); iterator.hasNext(); ) {
-            Map.Entry<String, MemberDescription> next = iterator.next();
-            if ( next.getValue().getMember() == closedActor )
-            {
-                roleMap.remove(next.getKey());
-//                evaluateTriggers(ListTrigger.REM,next.getValue());
                 break;
             }
         }
@@ -285,7 +277,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         Promise res = new Promise<>();
         member.$run(actorClass.getName()).then((r, e) -> {
             if ( r != null ) {
-                member.addActor(member);
+                member.$addActor(member);
             }
             res.receive(r, e);
         });
@@ -306,37 +298,16 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     //  sync, local API
     //
 
-    @CallerSideMethod public void setRole( KollektivMember member, String role ) {
-        if ( isRemote() )
-            throw new RuntimeException("cannot call on remote proxy");
-        List<MemberDescription> copy = getActor().members;
-        synchronized (copy) {
-            for (int i = 0; i < copy.size(); i++) {
-                MemberDescription kollektivMember = copy.get(i);
-                if ( kollektivMember.getMember() == member ) {
-                    getActor().roleMap.put(role,kollektivMember);
-                }
-            }
-        }
-    }
-
-    @CallerSideMethod public KollektivMember byRole( String role ) {
-        if ( isRemote() )
-            throw new RuntimeException("cannot call on remote proxy");
-        MemberDescription memberDescription = getActor().roleMap.get(role);
-        if ( memberDescription != null )
-            return memberDescription.getMember();
-        return null;
-    }
-
     //fixme: slowish
     @CallerSideMethod public MemberDescription getDescription( KollektivMember ref ) {
         if ( isRemote() )
             throw new RuntimeException("cannot call on remote proxy");
-        for (int i = 0; i < members.size(); i++) {
-            MemberDescription memberDescription = members.get(i);
-            if ( memberDescription.getMember() == ref ) {
-                return memberDescription;
+        synchronized (getActor().getMembers()) {
+            for (int i = 0; i < members.size(); i++) {
+                MemberDescription memberDescription = members.get(i);
+                if (memberDescription.getMember() == ref) {
+                    return memberDescription;
+                }
             }
         }
         return null;
@@ -354,9 +325,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     @CallerSideMethod public List<MemberDescription> getMembers() {
         if ( isRemote() )
             throw new RuntimeException("cannot call on remote proxy");
-        synchronized (getActor().members) {
-            return new ArrayList<>(getActor().members);
-        }
+        return new ArrayList<>(getActor().members);
     }
 
 }
