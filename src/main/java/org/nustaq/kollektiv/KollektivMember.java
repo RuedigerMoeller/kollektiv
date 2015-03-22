@@ -9,6 +9,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -255,6 +256,38 @@ public class KollektivMember extends Actor<KollektivMember> {
         return new Promise<>(null);
     }
 
+    public void $restart(long timeMillis) {
+        localLog.warn(this, "restarting in "+timeMillis+" ms");
+        self().$shutdownAllActors();
+        StringBuilder cmd = new StringBuilder();
+        cmd.append(System.getProperty("java.home") + File.separator + "bin" + File.separator + "java ");
+        for (String jvmArg : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
+            cmd.append(jvmArg + " ");
+        }
+        cmd.append("-cp ").append(ManagementFactory.getRuntimeMXBean().getClassPath()).append(" ");
+        cmd.append(KollektivMember.class.getName()).append(" ");
+        for (String arg : args) {
+            cmd.append(arg).append(" ");
+        }
+        delayed(timeMillis, () -> {
+            try {
+                Runtime.getRuntime().exec(cmd.toString());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            System.exit(0);
+        });
+    }
+
+    public void $terminate(long timeMillis) {
+        localLog.warn(this, "terminating in "+timeMillis+" ms");
+        self().$shutdownAllActors();
+        delayed(timeMillis, () -> {
+            System.exit(0);
+        });
+    }
+
+
     public static class Options {
         @Parameter( names = {"-c","-cores"}, description = "specify how many cores should be available. (Defaults to number of cores reported by OS).")
         int availableProcessors = Runtime.getRuntime().availableProcessors();
@@ -296,7 +329,9 @@ public class KollektivMember extends Actor<KollektivMember> {
         }
     }
 
+    static String[] args;
     public static void main( String a[] ) {
+        args = a;
         Options options = new Options();
         JCommander com = new JCommander();
         com.addObject(options);
@@ -312,6 +347,11 @@ public class KollektivMember extends Actor<KollektivMember> {
         }
 
         Log.Lg.$setSeverity(Log.WARN);
+        System.out.println(" __ __              _             \n" +
+                               "|  \\  \\ ___ ._ _ _ | |_  ___  _ _ \n" +
+                               "|     |/ ._>| ' ' || . \\/ ._>| '_>\n" +
+                               "|_|_|_|\\___.|_|_|_||___/\\___.|_|   of kollektiv" );
+        System.out.println("");
         System.out.println("starting kollektiv member with "+options );
         KollektivMember sl = Actors.AsActor(KollektivMember.class);
         sl.$init(options);

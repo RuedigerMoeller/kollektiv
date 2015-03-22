@@ -8,6 +8,7 @@ import org.nustaq.kontraktor.impl.DispatcherThread;
 import org.nustaq.kontraktor.util.Log;
 
 import java.util.HashMap;
+import java.util.List;
 
 /**
  * Created by ruedi on 07/03/15.
@@ -94,12 +95,26 @@ public class TestActor extends Actor<TestActor> {
             });
         } else {
             master.$onMemberAdd(description -> {
-                description.getRemotedActors().forEach(actor -> {
-                    if (actor instanceof TestActor) {
-                        TestActor testAct = (TestActor) actor;
-                        runStuff(description, testAct);
-                    }
-                });
+                List<Actor> remotedActors = description.getRemotedActors();
+                if ( remotedActors.size() == 0 ) {
+                    master.$run(description.getMember(),TestActor.class)
+                        .onResult( testAct -> {
+                            testAct.$init(master);
+                            runStuff(description, testAct);
+                        })
+                        .onError(err -> {
+                            System.out.println("error during start " + err + " from " + description.getNodeId());
+                            if (err instanceof Throwable)
+                                ((Throwable) err).printStackTrace();
+                        });
+                } else {
+                    remotedActors.forEach(actor -> {
+                        if (actor instanceof TestActor) {
+                            TestActor testAct = (TestActor) actor;
+                            runStuff(description, testAct);
+                        }
+                    });
+                }
                 return false;
             });
         }

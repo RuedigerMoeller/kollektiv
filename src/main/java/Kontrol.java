@@ -9,7 +9,7 @@ import org.nustaq.kontraktor.util.Log;
 /**
  * Created by ruedi on 16/03/15.
  */
-public class Dump {
+public class Kontrol {
 
     @Parameter(names={"-p","-port"}, description = "define the port serving on")
     int port = 3456;
@@ -17,6 +17,8 @@ public class Dump {
     boolean stop = false;
     @Parameter(names={"-r","-reboot"}, description = "send a signal to all members to attempt a restart")
     boolean reboot = false;
+    @Parameter(names={"-k","-kill"}, description = "send a signal to all members to terminate")
+    boolean terminate = false;
     @Parameter(names={"-changeMaster", "-cm"}, description = "change the address of the master members try to connect. Careful, a wrong host:port string can make members unreachable forever ..")
     String retarget = null;
     @Parameter(names = {"-h","-help","-?", "--help"}, help = true, description = "display help")
@@ -26,15 +28,23 @@ public class Dump {
 
     @Override
     public String toString() {
-        return "Options{" +
-                "port=" + port +
-                ", reboot=" + reboot +
-                ", duration=" + duration +
-                '}';
+        return "Kontrol{" +
+                   "port=" + port +
+                   ", stop=" + stop +
+                   ", reboot=" + reboot +
+                   ", terminate=" + terminate +
+                   ", retarget='" + retarget + '\'' +
+                   ", help=" + help +
+                   ", duration=" + duration +
+                   '}';
     }
 
     public static void main( String a[] ) throws Exception {
-        Dump options = new Dump();
+        System.out.println(
+                           " __  __  ____  __  _  _____ _____  ____  _    \n" +
+                           "|  |/  // () \\|  \\| ||_   _|| () )/ () \\| |__ \n" +
+                           "|__|\\__\\\\____/|_|\\__|  |_|  |_|\\_\\\\____/|____| kollektiv");
+        Kontrol options = new Kontrol();
         JCommander com = new JCommander();
         com.addObject(options);
         try {
@@ -50,16 +60,22 @@ public class Dump {
 
         Log.Lg.$setSeverity(Log.WARN);
 
+        System.out.println();
         System.out.println("start listening for members on "+options);
 
         KollektivMaster master = KollektivMaster.Start(options.port, ConnectionType.Passive );
         System.out.println("server started");
 
-        System.out.println();
         master.$onMemberAdd( member -> {
             System.out.println("Member added "+member);
             if ( options.stop ) {
                 member.getMember().$shutdownAllActors();
+            }
+            if ( options.terminate ) {
+                member.getMember().$terminate(3000);
+            }
+            if ( options.reboot ) {
+                member.getMember().$restart(3000);
             }
             return false;
         });
