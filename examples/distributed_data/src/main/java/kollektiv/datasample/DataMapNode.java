@@ -30,9 +30,10 @@ public class DataMapNode<K,V> extends Actor<DataMapNode<K,V>> {
         return new Promise(mappedValues.get(key) );
     }
 
-    public void $onMap( Spore<HashMap<K,V>, Object> spore ) {
+    public Future $onMap( Spore<HashMap<K,V>, Object> spore ) {
         spore.remote(mappedValues);
         spore.finished(); // close channel
+        return new Promise("done");
     }
 
     @Override

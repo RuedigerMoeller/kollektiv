@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -42,6 +43,7 @@ public class KollektivMember extends Actor<KollektivMember> {
 
     Options options;
     Log localLog;
+//    List<Actor> actors = Collections.synchronizedList(new ArrayList<>());
     List<Actor> actors = new ArrayList<>();
 
     public void $init(Options options) {
@@ -96,7 +98,10 @@ public class KollektivMember extends Actor<KollektivMember> {
                                 Log.Lg.warn(this, " start logging from " + nodeId);
                             }
                             MasterConnectedMsg message = new MasterConnectedMsg(master);
-                            actors.forEach( act -> act.$receive(message) );
+                            actors.forEach( act -> {
+                                if ( ! act.isStopped() )
+                                    act.$receive(message);
+                            });
                         })
                         .onError( err -> {
                             tryConnect = false;
@@ -124,7 +129,10 @@ public class KollektivMember extends Actor<KollektivMember> {
         if ( disconnectedRef == master ) {
             Log.Lg.resetToSysout();
             master = null;
-            actors.forEach( actor -> actor.$receive(MASTER_LOST) );
+            actors.forEach( actor -> {
+                if ( ! actor.isStopped() )
+                    actor.$receive(MASTER_LOST);
+            });
         }
         localLog.warn(this, "actor disconnected " + disconnectedRef + " address:" + address + " master: "+master );
     }
