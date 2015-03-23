@@ -55,9 +55,9 @@ public class TestActor extends Actor<TestActor> {
                     for (int i = 0; i < 1000000; i++) {
                         input.put(input.size(), "str " + input.size());
                     }
-                    returnResult(input.size(), null);
+                    stream(input.size());
                 }
-            }.then((res, err) -> System.out.println("Spore returned " + res))
+            }.forEachResult((res, err) -> System.out.println("Spore returned " + res))
         );
         testAct.$onMap(new Spore<HashMap, Object>() {
                 @Override
@@ -67,7 +67,7 @@ public class TestActor extends Actor<TestActor> {
                     }
                     finished();
                 }
-            }.then((res, err) -> System.out.println("Spore streamed " + res))
+            }.forEachResult((res, err) -> System.out.println("Spore streamed " + res))
         );
     }
 
@@ -75,8 +75,8 @@ public class TestActor extends Actor<TestActor> {
 
         DispatcherThread.DUMP_CATCHED = true; // ease diagnostics
 
-        ConnectionType conT = ConnectionType.Reconnect;
-//        ConnectionType conT = ConnectionType.Connect;
+//        ConnectionType conT = ConnectionType.Reconnect;
+        ConnectionType conT = ConnectionType.Connect;
 
         KollektivMaster master = KollektivMaster.Start(KollektivMember.DEFAULT_PORT,conT, null);
 

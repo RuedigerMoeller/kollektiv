@@ -2,6 +2,7 @@ package org.nustaq.kollektiv;
 
 import org.nustaq.kontraktor.*;
 import org.nustaq.kontraktor.annotations.CallerSideMethod;
+import org.nustaq.kontraktor.annotations.InThread;
 import org.nustaq.kontraktor.remoting.tcp.TCPActorServer;
 import org.nustaq.kontraktor.util.Log;
 
@@ -226,12 +227,12 @@ public class KollektivMaster extends Actor<KollektivMaster> {
      * called on each member add until true is returned from given closure (true means unregister listener)
      * @param md
      */
-    public void $onMemberAdd(Function<MemberDescription,Boolean> md) {
+    public void $onMemberAdd(@InThread Function<MemberDescription,Boolean> md) {
         triggers.add(new ListTrigger(description -> md.apply(description), ListTrigger.ADD));
         members.forEach(member -> evaluateTriggers( ListTrigger.ADD, member ));
     }
 
-    public void $onMemberRem(Function<MemberDescription,Boolean> md) {
+    public void $onMemberRem(@InThread Function<MemberDescription,Boolean> md) {
         triggers.add(new ListTrigger(description -> md.apply(description), ListTrigger.REM));
     }
 

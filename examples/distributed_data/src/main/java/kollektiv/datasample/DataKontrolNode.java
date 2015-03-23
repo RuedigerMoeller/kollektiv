@@ -4,6 +4,8 @@ import org.nustaq.kollektiv.ConnectionType;
 import org.nustaq.kollektiv.KollektivMaster;
 import org.nustaq.kollektiv.KollektivMember;
 import org.nustaq.kontraktor.*;
+import static org.nustaq.kontraktor.Actors.*;
+import org.nustaq.kontraktor.util.FutureLatch;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -16,21 +18,21 @@ import java.util.List;
 public class DataKontrolNode extends Actor<DataKontrolNode> {
 
     KollektivMaster master;
-    List<DataMapNode> memberActors;
+    List<DataMapActor> memberActors;
 
     public Future $main( String arg[] ) {
         try {
             master = KollektivMaster.Start( KollektivMember.DEFAULT_PORT, ConnectionType.Connect, self() );
             memberActors = new ArrayList<>();
             // we don't register for add/remove MemberNode events in this example
-            delayed( 5000, () -> {
+            self().delayed(5000, () -> {
                 // for sake of simplicity, just wait 5 seconds and continue with the fixed set
                 // of cluster member nodes registered up to then (no dynamic cluster node handling in this example)
-                Actors.yieldEach(
-                    master.getMembers().stream()
-                        .map( memberDescription -> master.$run(memberDescription.getMember(), DataMapNode.class) ),
-                    (res,err) -> memberActors.add(res)
-                ).onResult( (dummy) -> self().$runTestLogic() );
+                yieldMap(
+                   master.getMembers(),
+                   memberDescription -> master.$run(memberDescription.getMember(), DataMapActor.class),
+                   (res, err) -> memberActors.add(res)
+                ).then(() -> self().$runTestLogic());
             });
             return new Promise<>("success");
         } catch (Exception e) {
@@ -40,6 +42,8 @@ public class DataKontrolNode extends Actor<DataKontrolNode> {
 
     public void $runTestLogic() {
 
+        // as always: chaining plain sync logic with async actors is kind of a pain ...
+
         System.out.println("start running test logic");
         // fill in some data
         for ( int i = 0; i < 2000000; i++ ) {
@@ -47,20 +51,31 @@ public class DataKontrolNode extends Actor<DataKontrolNode> {
             Object value[] = { i, i*i, key };
             $put(key, value);
         }
-        System.out.println("finished running test logic");
+        System.out.println("finished running test logic"); // actually its in flight ..
 
+        Promise loopEnd = new Promise();
+        FutureLatch latch = new FutureLatch( loopEnd, memberActors.size() );
+
+        // send a spore to each DataMapActor
         memberActors.forEach( dmNode -> {
-            dmNode.$onMap(new Spore<HashMap, Object>() {
+            dmNode.$doWithMap(new Spore<HashMap, Object>() {
                 @Override
                 public void remote(HashMap input) {
-                    returnResult(input.size());
+                    // could do arbitrary stuff on the local data of DataMapActor
+                    // just stream back size of map
+                    stream(input.size());
                 }
-            }.then( (r,e) -> {
-                System.out.println("dmNode has size "+r);
-            })).then( () -> {
-                $get("13").onResult(r1 -> System.out.println("13 -> "+ Arrays.toString((Object[])r1)));
-                $get("14").onResult(r2 -> System.out.println("14 -> "+ Arrays.toString((Object[])r2)));
-            });
+            }
+            .forEachResult( (r, e) -> System.out.println("dmNode has size " + r) )
+            .onFinish( () -> latch.countDown() ));
+        });
+
+        // once spores finished, do some get ops
+        loopEnd.then( () -> {
+            $get("13").onResult(r1 -> System.out.println("13 -> " + Arrays.toString((Object[]) r1)));
+            $get("14").onResult(r2 -> System.out.println("14 -> " + Arrays.toString((Object[]) r2)));
+            $get("15").onResult(r2 -> System.out.println("14 -> " + Arrays.toString((Object[]) r2)));
+            $get("16").onResult(r2 -> System.out.println("14 -> " + Arrays.toString((Object[]) r2)));
         });
 
     }
@@ -73,8 +88,8 @@ public class DataKontrolNode extends Actor<DataKontrolNode> {
      */
     public void $put(Object key, Object[] value) {
         int nodeNum = Math.abs(key.hashCode() % memberActors.size());
-        DataMapNode dataMapNode = memberActors.get(nodeNum);
-        dataMapNode.$put(key,value);
+        DataMapActor dataMapActor = memberActors.get(nodeNum);
+        dataMapActor.$put(key,value);
     }
 
     /**
@@ -84,12 +99,12 @@ public class DataKontrolNode extends Actor<DataKontrolNode> {
      */
     public Future $get(Object key) {
         int nodeNum = key.hashCode() % memberActors.size();
-        DataMapNode dataMapNode = memberActors.get(nodeNum);
-        return dataMapNode.$get(key);
+        DataMapActor dataMapActor = memberActors.get(nodeNum);
+        return dataMapActor.$get(key);
     }
 
     public static void main( String a[] ) {
-        Actors.AsActor(DataKontrolNode.class).$main(a).onError( error -> {
+        AsActor(DataKontrolNode.class).$main(a).onError( error -> {
             if ( error instanceof Throwable )
                 ((Throwable) error).printStackTrace();
             else

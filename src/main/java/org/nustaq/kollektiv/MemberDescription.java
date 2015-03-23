@@ -82,6 +82,9 @@ public class MemberDescription implements Serializable {
         this.nodeId = nodeId;
     }
 
+    /**
+     * @return a remote actor ref to the KollektivMember's api.
+     */
     public KollektivMember getMember() {
         return member;
     }

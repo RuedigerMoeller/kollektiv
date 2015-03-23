@@ -6,14 +6,13 @@ import org.nustaq.kontraktor.Actor;
 import org.nustaq.kontraktor.Future;
 import org.nustaq.kontraktor.Promise;
 import org.nustaq.kontraktor.Spore;
-import org.nustaq.kontraktor.util.Log;
 
 import java.util.HashMap;
 
 /**
  * Created by ruedi on 22/03/15.
  */
-public class DataMapNode<K,V> extends Actor<DataMapNode<K,V>> {
+public class DataMapActor<K,V> extends Actor<DataMapActor<K,V>> {
 
     HashMap<K,V> mappedValues = new HashMap<K,V>();
     private DataKontrolNode kontrol;
@@ -30,10 +29,9 @@ public class DataMapNode<K,V> extends Actor<DataMapNode<K,V>> {
         return new Promise(mappedValues.get(key) );
     }
 
-    public Future $onMap( Spore<HashMap<K,V>, Object> spore ) {
+    public void $doWithMap(Spore<HashMap<K, V>, Object> spore) {
         spore.remote(mappedValues);
         spore.finished(); // close channel
-        return new Promise("done");
     }
 
     @Override
