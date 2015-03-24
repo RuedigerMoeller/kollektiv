@@ -1,7 +1,6 @@
 package org.nustaq.kollektiv;
 
 import org.nustaq.kontraktor.*;
-import org.nustaq.kontraktor.annotations.CallerSideMethod;
 import org.nustaq.kontraktor.remoting.tcp.TCPActorClient;
 import org.nustaq.kontraktor.util.Log;
 
@@ -17,7 +16,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -161,7 +159,7 @@ public class KollektivMember extends Actor<KollektivMember> {
             Object actorBS = bootstrap.getConstructor(Class.class).newInstance(actorClazz);
             Field f = actorBS.getClass().getField("actor");
             Actor resAct = (Actor) f.get(actorBS);
-            $addActor(resAct);
+            addActor(resAct);
             res.receive(resAct,null);
         } catch (Exception e) {
             e.printStackTrace();
@@ -306,8 +304,8 @@ public class KollektivMember extends Actor<KollektivMember> {
         });
     }
 
-    public void $addActor(Actor resAct) {
-        getActor().actors.add(resAct);
+    private void addActor(Actor resAct) {
+        actors.add(resAct);
     }
 
     public static class Options {

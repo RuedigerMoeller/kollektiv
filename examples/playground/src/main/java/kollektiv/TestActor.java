@@ -92,7 +92,6 @@ public class TestActor extends Actor<TestActor> {
                         if (err instanceof Throwable)
                             ((Throwable) err).printStackTrace();
                     });
-                return false;
             });
         } else {
             master.$onMemberAdd(description -> {
@@ -116,7 +115,6 @@ public class TestActor extends Actor<TestActor> {
                         }
                     });
                 }
-                return false;
             });
         }
     }

@@ -12,8 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.Function;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -45,19 +44,22 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         public static int REM = 2;
         public static int LIST_RELATED = 3;
 
-        public ListTrigger(Function<MemberDescription,Boolean> condition, int type) {
+        public ListTrigger(Consumer<MemberDescription> condition, int type) {
             this.setCondition(condition);
             this.setType(type);
         }
 
-        private Function<MemberDescription,Boolean> condition;
+        private Consumer<MemberDescription> condition;
         private int type;
 
-        public Function<MemberDescription, Boolean> getCondition() {
+        public ListTrigger() {
+        }
+
+        public Consumer<MemberDescription> getCondition() {
             return condition;
         }
 
-        public void setCondition(Function<MemberDescription, Boolean> condition) {
+        public void setCondition(Consumer<MemberDescription> condition) {
             this.condition = condition;
         }
 
@@ -224,16 +226,16 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     }
 
     /**
-     * called on each member add until true is returned from given closure (true means unregister listener)
+     * called on each member add
      * @param md
      */
-    public void $onMemberAdd(@InThread Function<MemberDescription,Boolean> md) {
-        triggers.add(new ListTrigger(description -> md.apply(description), ListTrigger.ADD));
+    public void $onMemberAdd(@InThread Consumer<MemberDescription> md) {
+        triggers.add(new ListTrigger(description -> md.accept(description), ListTrigger.ADD));
         members.forEach(member -> evaluateTriggers( ListTrigger.ADD, member ));
     }
 
-    public void $onMemberRem(@InThread Function<MemberDescription,Boolean> md) {
-        triggers.add(new ListTrigger(description -> md.apply(description), ListTrigger.REM));
+    public void $onMemberRem(@InThread Consumer<MemberDescription> md) {
+        triggers.add(new ListTrigger(description -> md.accept(description), ListTrigger.REM));
     }
 
     /**
@@ -243,28 +245,26 @@ public class KollektivMaster extends Actor<KollektivMaster> {
      */
     public Future $onMemberMoreThan(int i) {
         Promise p = new Promise();
-        triggers.add(
-            new ListTrigger( (description) -> {
-                if ( members.size() >= i) {
-                    p.notify();
-                    return true;
-                }
-                return false;
-            }, ListTrigger.LIST_RELATED)
-        );
+        final ListTrigger trigger = new ListTrigger();
+        trigger.setCondition(description -> {
+            if ( members.size() >= i) {
+                p.notify();
+                triggers.remove(trigger);
+            }
+        });
+        trigger.setType(ListTrigger.LIST_RELATED);
+        triggers.add( trigger );
+
         evaluateTriggers(ListTrigger.LIST_RELATED, null);
         return p;
     }
 
     private void evaluateTriggers(int actionType, MemberDescription item) {
-        triggers = triggers.stream().filter(trigger -> {
+        triggers.forEach(trigger -> {
             if ((trigger.getType() == actionType)) {
-                if (trigger.getCondition().apply(item).booleanValue()) {
-                    return false;
-                }
+                trigger.getCondition().accept(item);
             }
-            return true;
-        }).collect(Collectors.toList());
+        });
     }
 
     @CallerSideMethod public <T extends Actor> Future<T> $runOnDescription( MemberDescription description, Class<T> actorClass) {
@@ -278,7 +278,8 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         Promise res = new Promise<>();
         member.$run(actorClass.getName()).then((r, e) -> {
             if ( r != null ) {
-                member.$addActor(member);
+                // cannot be stored in ref
+                // member.addActor(member);
             }
             res.receive(r, e);
         });

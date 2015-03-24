@@ -79,11 +79,9 @@ public class Kontrol {
             if ( options.reboot ) {
                 member.getMember().$restart(3000);
             }
-            return false;
         });
         master.$onMemberRem((member) -> {
             System.out.println("Member removed " + member);
-            return false;
         });
 
         Thread.sleep(options.duration*1000);
