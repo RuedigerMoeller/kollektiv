@@ -229,14 +229,12 @@ public class KollektivMember extends Actor<KollektivMember> {
 
     public Future $defineNameSpace( ActorAppBundle bundle ) {
         try {
-            ActorAppBundle actorAppBundle = app;
-            File base = new File( options.getTmpDirectory() + File.separator + nodeId+File.separator+bundle.getName());
+            File base = new File( options.getTmpDirectory() + File.separator + nodeId+File.separator+bundle);
             int count = 0;
             while ( ! tryDelRecursive(base) ) {
-                base = new File( base.getParent() + File.separator + bundle.getName()+"_"+ count++);
+                base = new File( base.getParent() + File.separator + bundle+"_"+ count++);
             }
             base.mkdirs();
-            localLog.warn(this, "define name space " + bundle.getName() + " size " + bundle.getSizeKB() + " filebase:" + base.getAbsolutePath());
             final File finalBase = base;
             bundle.getResources().entrySet().forEach(entry -> {
                 if (entry.getKey().endsWith(".jar")) {
@@ -267,6 +265,7 @@ public class KollektivMember extends Actor<KollektivMember> {
             }
             bundle.setLoader(memberClassLoader);
             app = bundle;
+            localLog.warn(this, "defined app bundle space " + bundle + " size " + bundle.getSizeKB() + " filebase:" + base.getAbsolutePath());
         } catch (MalformedURLException e) {
             e.printStackTrace();
         }

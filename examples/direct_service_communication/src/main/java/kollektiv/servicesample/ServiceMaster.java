@@ -3,7 +3,6 @@ package kollektiv.servicesample;
 import org.nustaq.kollektiv.ConnectionType;
 import org.nustaq.kollektiv.KollektivMaster;
 import org.nustaq.kollektiv.KollektivMember;
-import org.nustaq.kollektiv.MemberDescription;
 import org.nustaq.kontraktor.Actor;
 import org.nustaq.kontraktor.Future;
 import org.nustaq.kontraktor.Promise;
@@ -17,7 +16,18 @@ import static org.nustaq.kontraktor.Actors.*;
  */
 public class ServiceMaster extends Actor<ServiceMaster> {
 
+    static class ListenerEntry {
+        String serviceName;
+        Promise toNotify;
+
+        public ListenerEntry(String serviceName, Promise toNotify) {
+            this.serviceName = serviceName;
+            this.toNotify = toNotify;
+        }
+    }
+
     HashMap<String,List<ServiceDescription>> services = new HashMap<>();
+    ArrayList<ListenerEntry> clients = new ArrayList<>();
 
     public void $registerService( ServiceDescription desc ) {
         System.out.println("register service '"+desc.getName()+"'at "+desc.getHost()+":"+desc.getPort());
@@ -27,10 +37,47 @@ public class ServiceMaster extends Actor<ServiceMaster> {
             services.put(desc.getName(),serviceDescriptions);
         }
         serviceDescriptions.add(desc);
+        // check if someone has been waiting for this service and notify in case
+        for (int i = 0; i < clients.size(); i++) {
+            ListenerEntry listenerEntry = clients.get(i);
+            if ( listenerEntry.serviceName.equals(desc.getName() ) ) {
+                listenerEntry.toNotify.receive( desc, null );
+                clients.remove(i);
+                i--;
+            }
+        }
+    }
+
+    public Future<ServiceDescription> $waitForService( String name ) {
+        Promise<ServiceDescription> res = new Promise<>();
+        ServiceDescription desc = findService(name);
+        if ( desc != null ) {
+            res.receive(desc,null);
+        } else {
+            // if service is not present, add it to list and
+            // fulfil the future once the required service registers
+            clients.add(new ListenerEntry(name,res));
+        }
+        return res;
+    }
+
+    private ServiceDescription findService(String name) {
+        // generics are quite verbose at time ;) ..
+        for (Iterator<Map.Entry<String, List<ServiceDescription>>> iterator = services.entrySet().iterator(); iterator.hasNext(); ) {
+            Map.Entry<String, List<ServiceDescription>> next = iterator.next();
+            if ( next.getKey().equals(name) && next.getValue().size() > 0 ) {
+                return next.getValue().get(0);
+            }
+        }
+        return null;
     }
 
     public void $main(String a[]) {
-        List<Class<? extends Actor>> servicesToStart = new ArrayList<>(Arrays.asList( ServiceA.class, ServiceB.class, ServiceC.class ));
+        List<Class<? extends Actor>> servicesToStart = new ArrayList<>(Arrays.asList(
+            ServiceC.class,
+            ServiceB.class,
+            ServiceA.class
+        ));
         try {
             KollektivMaster master = KollektivMaster.Start(KollektivMember.DEFAULT_PORT, ConnectionType.Connect, self());
             Promise allNodesStarted = new Promise<>();
@@ -56,9 +103,9 @@ public class ServiceMaster extends Actor<ServiceMaster> {
                 }
             });
             master.$onMemberRem(memberDesc -> {
-
+                // not implemented in example
             });
-            allNodesStarted.then( () -> {
+            allNodesStarted.then(() -> {
                 System.out.println("All nodes started");
             });
         } catch (Exception e) {

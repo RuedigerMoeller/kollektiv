@@ -25,7 +25,6 @@ public class ActorAppBundle implements Serializable {
         }
     }
 
-    String name;
     HashMap<String,CPEntry> resources = new HashMap<>();
 
     transient String baseDir;
@@ -33,18 +32,6 @@ public class ActorAppBundle implements Serializable {
 
     public void put(String normalizedPath, byte[] bytes) {
         resources.put(normalizedPath, new CPEntry(bytes, normalizedPath));
-    }
-
-    public ActorAppBundle(String name) {
-        this.name = name;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
     }
 
     public void setResources(HashMap<String, CPEntry> resources) {

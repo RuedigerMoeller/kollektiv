@@ -2,6 +2,7 @@ package kollektiv.servicesample;
 
 import org.nustaq.kontraktor.Actor;
 import org.nustaq.kontraktor.Future;
+import org.nustaq.kontraktor.Promise;
 import org.nustaq.kontraktor.remoting.tcp.TCPActorServer;
 
 import java.net.InetAddress;
@@ -18,4 +19,9 @@ public class ServiceB extends AbstractService<ServiceB> {
     protected int getPort() {
         return 35001;
     }
+
+    public Future<Object> $helloFrom(String s) {
+        return new Promise( "B received '"+s+"'");
+    }
+
 }

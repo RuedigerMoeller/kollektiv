@@ -157,12 +157,12 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     ActorAppBundle getCachedBundle(String classpath) {
         if ( cachedBundle == null ) {
             cachedCP = classpath;
-            cachedBundle = new ActorAppBundle("Hello");
+            cachedBundle = new ActorAppBundle();
             buildAppBundle(cachedBundle,classpath);
         } else {
             // some members might have a different set of predefined jars ..
             if ( ! cachedCP.equals(classpath) ) {
-                ActorAppBundle bundle = new ActorAppBundle("Hello");
+                ActorAppBundle bundle = new ActorAppBundle();
                 buildAppBundle(bundle,classpath);
                 return bundle;
             }
