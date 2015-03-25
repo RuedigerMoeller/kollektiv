@@ -89,7 +89,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     }
 
     public Future<MasterDescription> $registerMember(MemberDescription sld) {
-        Log.Info(this, "receive registration " + sld + " members:" + members.size() + 1);
+        Log.Info(this, "settle registration " + sld + " members:" + members.size() + 1);
         Promise p = new Promise();
         if ( connectionType == ConnectionType.Reconnect ) {
             sld.getMember().$reconnect(self())
@@ -121,14 +121,14 @@ public class KollektivMaster extends Actor<KollektivMaster> {
             if (e == null) {
                 Log.Info(this, "transfer COMPLETE: " + sld);
                 addMember(sld);
-                p.receive( new MasterDescription(), null );
+                p.settle(new MasterDescription(), null);
             }
             else {
                 if (e instanceof Throwable) {
                     ((Throwable) e).printStackTrace();
                 }
                 Log.Info(this, "transfer FAILED: " + sld + " " + e);
-                p.receive(null,e);
+                p.settle(null, e);
             }
         });
     }
@@ -281,14 +281,14 @@ public class KollektivMaster extends Actor<KollektivMaster> {
                 // cannot be stored in ref
                 // member.addActor(member);
             }
-            res.receive(r, e);
+            res.settle(r, e);
         });
         return res;
     }
 
     public void $getMembers( Callback<MemberDescription> cb ) {
-        members.forEach( member -> cb.receive(member,CONT) );
-        cb.receive(null, FINSILENT);
+        members.forEach( member -> cb.settle(member, CONT) );
+        cb.settle(null, FINSILENT);
     }
 
     public void $remoteLog( int severity, String source, String msg ) {

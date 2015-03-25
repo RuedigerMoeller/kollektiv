@@ -62,7 +62,7 @@ public class DataKontrolNode extends Actor<DataKontrolNode> {
                 @Override
                 public void remote(HashMap input) {
                     // could do arbitrary stuff on the local data of DataMapActor
-                    // just stream back size of map
+                    // just stream back size of then
                     stream(input.size());
                 }
             }

@@ -5,7 +5,7 @@ import java.io.Serializable;
 /**
  * Created by ruedi on 23/03/15.
  *
- * Init message delivered for init to all services via untyped $receive method.
+ * Init message delivered for init to all services via untyped $settle method.
  */
 public class InitMsg implements Serializable {
 
