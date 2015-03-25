@@ -57,7 +57,7 @@ public class TestActor extends Actor<TestActor> {
                     }
                     stream(input.size());
                 }
-            }.forEachResult((res, err) -> System.out.println("Spore returned " + res))
+            }.forEach((res, err) -> System.out.println("Spore returned " + res))
         );
         testAct.$onMap(new Spore<HashMap, Object>() {
                 @Override
@@ -67,7 +67,7 @@ public class TestActor extends Actor<TestActor> {
                     }
                     finished();
                 }
-            }.forEachResult((res, err) -> System.out.println("Spore streamed " + res))
+            }.forEach((res, err) -> System.out.println("Spore streamed " + res))
         );
     }
 

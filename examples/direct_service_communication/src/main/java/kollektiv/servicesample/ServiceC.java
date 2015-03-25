@@ -62,7 +62,7 @@ public class ServiceC extends AbstractService<ServiceC> {
                             }
                         });
                     }
-                } catch (IOException e) {
+                } catch (Exception e) {
                     e.printStackTrace();
                     serviceB = null;
                     delayed(500, () -> tryConnect());

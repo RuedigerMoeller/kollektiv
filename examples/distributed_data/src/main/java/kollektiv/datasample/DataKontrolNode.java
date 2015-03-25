@@ -66,7 +66,7 @@ public class DataKontrolNode extends Actor<DataKontrolNode> {
                     stream(input.size());
                 }
             }
-            .forEachResult( (r, e) -> System.out.println("dmNode has size " + r) )
+            .forEach((r, e) -> System.out.println("dmNode has size " + r))
             .onFinish( () -> latch.countDown() ));
         });
 
