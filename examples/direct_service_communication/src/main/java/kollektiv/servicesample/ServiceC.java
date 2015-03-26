@@ -5,10 +5,6 @@ import org.nustaq.kontraktor.Future;
 import org.nustaq.kontraktor.remoting.tcp.TCPActorClient;
 import org.nustaq.kontraktor.util.Log;
 
-import java.io.IOException;
-
-import static org.nustaq.kontraktor.Actors.*;
-
 /**
  * Created by ruedi on 23/03/15.
  */
@@ -31,15 +27,15 @@ public class ServiceC extends AbstractService<ServiceC> {
         // serviceC depends on service A and B.
         // create a direct connections to avoid tunneling each message  via ServiceMaster
         Log.Warn(this, "waiting for B");
-        Future<Future<ServiceDescription>[]> bothpresent = yield(
-            serviceMaster.$waitForService("ServiceA"),
-            serviceMaster.$waitForService("ServiceB")
+        Future<Future<ServiceDescription>[]> bothpresent = all(
+                                                                  serviceMaster.$waitForService("ServiceA"),
+                                                                  serviceMaster.$waitForService("ServiceB")
         );
 
         bothpresent.onResult(futArr -> {
             for (int i = 0; i < futArr.length; i++) {
                 int finalI = i;
-                ServiceDescription serviceDesc = futArr[i].getResult();
+                ServiceDescription serviceDesc = futArr[i].get();
                 Class<? extends Actor> clazz = i==0 ? ServiceA.class : ServiceB.class;
 
                 try {

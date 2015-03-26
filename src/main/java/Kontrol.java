@@ -93,7 +93,7 @@ public class Kontrol {
         System.out.println("Members("+members.size()+"):");
         members.forEach(member -> {
             System.out.println(member);
-            Actors.sync(member.getMember().$allActorNames()).forEach( actorDescription -> System.out.println( "  "+actorDescription ));
+            member.getMember().$allActorNames().yield().forEach( actorDescription -> System.out.println( "  "+actorDescription ));
         });
 
         System.exit(-1);

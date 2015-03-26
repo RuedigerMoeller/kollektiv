@@ -3,8 +3,8 @@ package kollektiv.datasample;
 import org.nustaq.kollektiv.ConnectionType;
 import org.nustaq.kollektiv.KollektivMaster;
 import org.nustaq.kollektiv.KollektivMember;
+import org.nustaq.kollektiv.MemberDescription;
 import org.nustaq.kontraktor.*;
-import static org.nustaq.kontraktor.Actors.*;
 import org.nustaq.kontraktor.util.FutureLatch;
 
 import java.util.ArrayList;
@@ -25,14 +25,18 @@ public class DataKontrolNode extends Actor<DataKontrolNode> {
             master = KollektivMaster.Start( KollektivMember.DEFAULT_PORT, ConnectionType.Connect, self() );
             memberActors = new ArrayList<>();
             // we don't register for add/remove MemberNode events in this example
-            self().delayed(5000, () -> {
-                // for sake of simplicity, just wait 5 seconds and continue with the fixed set
-                // of cluster member nodes registered up to then (no dynamic cluster node handling in this example)
-                yieldMap(
-                   master.getMembers(),
-                   memberDescription -> master.$run(memberDescription.getMember(), DataMapActor.class),
-                   (res, err) -> memberActors.add(res)
-                ).then(() -> self().$runTestLogic());
+            // for sake of simplicity, just wait 5 seconds and continue with the fixed set
+            // of cluster member nodes registered up to then (no dynamic cluster node handling in this example)
+            delayed(5000, () -> {
+                for (int i = 0; i < master.getMembers().size(); i++) {
+                    MemberDescription mdesc = master.getMembers().get(i);
+                    // await is like yield, but does not throw ex
+                    DataMapActor node = master.$run(mdesc.getMember(), DataMapActor.class).await().get();
+                    if ( node != null ) {
+                        memberActors.add(node);
+                    }
+                }
+                self().$runTestLogic();
             });
             return new Promise<>("success");
         } catch (Exception e) {
