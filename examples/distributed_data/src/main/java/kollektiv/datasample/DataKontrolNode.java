@@ -31,7 +31,7 @@ public class DataKontrolNode extends Actor<DataKontrolNode> {
                 for (int i = 0; i < master.getMembers().size(); i++) {
                     MemberDescription mdesc = master.getMembers().get(i);
                     // await is like yield, but does not throw ex
-                    DataMapActor node = master.$run(mdesc.getMember(), DataMapActor.class).await().get();
+                    DataMapActor node = master.$run(mdesc.getMember(), DataMapActor.class).awaitFuture().get();
                     if ( node != null ) {
                         memberActors.add(node);
                     }

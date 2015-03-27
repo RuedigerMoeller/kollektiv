@@ -4,7 +4,6 @@ import org.nustaq.kollektiv.ConnectionType;
 import org.nustaq.kollektiv.KollektivMaster;
 import org.nustaq.kollektiv.KollektivMember;
 import org.nustaq.kollektiv.MemberDescription;
-import org.nustaq.kontraktor.Actors;
 import org.nustaq.kontraktor.util.Log;
 
 /**
@@ -93,7 +92,7 @@ public class Kontrol {
         System.out.println("Members("+members.size()+"):");
         members.forEach(member -> {
             System.out.println(member);
-            member.getMember().$allActorNames().yield().forEach( actorDescription -> System.out.println( "  "+actorDescription ));
+            member.getMember().$allActorNames().await().forEach( actorDescription -> System.out.println( "  "+actorDescription ));
         });
 
         System.exit(-1);
