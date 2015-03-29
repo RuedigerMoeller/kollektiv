@@ -99,9 +99,9 @@ public class KollektivMaster extends Actor<KollektivMaster> {
                         if (err == null) {
                             list.forEach(remoteactor -> sld.getRemotedActors().add(remoteactor));
                             addMember(sld);
-                            p.receiveResult(new MasterDescription());
+                            p.resolve(new MasterDescription());
                         } else {
-                            p.receiveError(err);
+                            p.reject(err);
                         }
                     });
                 });
@@ -110,7 +110,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         } else {
             sld.getMember().$reconnect(self());
             addMember(sld);
-            p.receiveResult(new MasterDescription());
+            p.resolve(new MasterDescription());
         }
         return p;
     }
