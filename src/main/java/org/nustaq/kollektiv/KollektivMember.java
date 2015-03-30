@@ -145,7 +145,7 @@ public class KollektivMember extends Actor<KollektivMember> {
 
     }
 
-    public Future<Actor> $run(String clazzname) {
+    public Future<Actor> $runMember(String clazzname) {
         Promise res = new Promise();
         try {
             ActorAppBundle actorAppBundle = app;

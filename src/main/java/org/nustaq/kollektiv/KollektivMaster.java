@@ -268,15 +268,15 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     }
 
     @CallerSideMethod public <T extends Actor> Future<T> $runOnDescription( MemberDescription description, Class<T> actorClass) {
-        return $run( description.getMember(), actorClass );
+        return $runMaster(description.getMember(), actorClass);
     }
 
-    public <T extends Actor> Future<T> $run( KollektivMember member, Class<T> actorClass) {
+    public <T extends Actor> Future<T> $runMaster(KollektivMember member, Class<T> actorClass) {
         if ( members.size() == 0 ) {
             return new Promise<>(null,"no members available");
         }
         Promise res = new Promise<>();
-        member.$run(actorClass.getName()).then((r, e) -> {
+        member.$runMember(actorClass.getName()).then((r, e) -> {
             if ( r != null ) {
                 // cannot be stored in ref
                 // member.addActor(member);

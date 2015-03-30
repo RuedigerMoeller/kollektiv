@@ -9,8 +9,6 @@ import org.nustaq.kontraktor.Promise;
 
 import java.util.*;
 
-import static org.nustaq.kontraktor.Actors.*;
-
 /**
  * Created by ruedi on 23/03/15.
  */
@@ -85,7 +83,7 @@ public class ServiceMaster extends Actor<ServiceMaster> {
                 if ( servicesToStart.size() > 0 ) {
                     Class<? extends Actor> toStart = servicesToStart.remove(servicesToStart.size() - 1);
                     final int toStarteSize = servicesToStart.size(); // caveat: need to capture
-                    master.$run( memberDesc.getMember(), toStart).then( (remoteRef,error) -> {
+                    master.$runMaster(memberDesc.getMember(), toStart).then( (remoteRef,error) -> {
                         if ( error != null ) {
                             servicesToStart.add(toStart);
                             System.out.println("Failed to start actor");

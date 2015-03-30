@@ -82,7 +82,7 @@ public class TestActor extends Actor<TestActor> {
 
         if ( conT == ConnectionType.Connect ) {
             master.$onMemberAdd(description -> {
-                master.$run(description.getMember(),TestActor.class)
+                master.$runMaster(description.getMember(), TestActor.class)
                     .onResult( testAct -> {
                         testAct.$init(master);
                         runStuff(description, testAct);
@@ -97,7 +97,7 @@ public class TestActor extends Actor<TestActor> {
             master.$onMemberAdd(description -> {
                 List<Actor> remotedActors = description.getRemotedActors();
                 if ( remotedActors.size() == 0 ) {
-                    master.$run(description.getMember(),TestActor.class)
+                    master.$runMaster(description.getMember(), TestActor.class)
                         .onResult( testAct -> {
                             testAct.$init(master);
                             runStuff(description, testAct);
