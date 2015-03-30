@@ -31,7 +31,7 @@ public class DataMapActor<K,V> extends Actor<DataMapActor<K,V>> {
 
     public void $doWithMap(Spore<HashMap<K, V>, Object> spore) {
         spore.remote(mappedValues);
-        spore.finished(); // close channel
+        spore.finish(); // close channel
     }
 
     @Override

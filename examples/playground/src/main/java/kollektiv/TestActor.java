@@ -65,7 +65,7 @@ public class TestActor extends Actor<TestActor> {
                     for (int i = 0; i < 10; i++) {
                         stream(input.get(i));
                     }
-                    finished();
+                    finish();
                 }
             }.forEach((res, err) -> System.out.println("Spore streamed " + res))
         );

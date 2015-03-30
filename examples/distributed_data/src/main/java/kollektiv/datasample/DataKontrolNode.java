@@ -78,8 +78,8 @@ public class DataKontrolNode extends Actor<DataKontrolNode> {
         loopEnd.then( () -> {
             $get("13").onResult(r1 -> System.out.println("13 -> " + Arrays.toString((Object[]) r1)));
             $get("14").onResult(r2 -> System.out.println("14 -> " + Arrays.toString((Object[]) r2)));
-            $get("15").onResult(r2 -> System.out.println("14 -> " + Arrays.toString((Object[]) r2)));
-            $get("16").onResult(r2 -> System.out.println("14 -> " + Arrays.toString((Object[]) r2)));
+            $get("15").onResult(r2 -> System.out.println("15 -> " + Arrays.toString((Object[]) r2)));
+            $get("16").onResult(r2 -> System.out.println("16 -> " + Arrays.toString((Object[]) r2)));
         });
 
     }

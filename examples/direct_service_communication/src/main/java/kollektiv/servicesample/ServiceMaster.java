@@ -103,7 +103,7 @@ public class ServiceMaster extends Actor<ServiceMaster> {
             master.$onMemberRem(memberDesc -> {
                 // not implemented in example
             });
-            allNodesStarted.then(() -> {
+            allNodesStarted.then( () -> {
                 System.out.println("All nodes started");
             });
         } catch (Exception e) {
