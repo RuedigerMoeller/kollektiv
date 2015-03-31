@@ -160,10 +160,10 @@ public class KollektivMember extends Actor<KollektivMember> {
             Field f = actorBS.getClass().getField("actor");
             Actor resAct = (Actor) f.get(actorBS);
             addActor(resAct);
-            res.settle(resAct, null);
+            res.complete(resAct, null);
         } catch (Exception e) {
             e.printStackTrace();
-            res.settle(null, e);
+            res.complete(null, e);
         }
         return res;
     }

@@ -39,7 +39,7 @@ public class ServiceMaster extends Actor<ServiceMaster> {
         for (int i = 0; i < clients.size(); i++) {
             ListenerEntry listenerEntry = clients.get(i);
             if ( listenerEntry.serviceName.equals(desc.getName() ) ) {
-                listenerEntry.toNotify.settle(desc, null);
+                listenerEntry.toNotify.complete(desc, null);
                 clients.remove(i);
                 i--;
             }
@@ -50,7 +50,7 @@ public class ServiceMaster extends Actor<ServiceMaster> {
         Promise<ServiceDescription> res = new Promise<>();
         ServiceDescription desc = findService(name);
         if ( desc != null ) {
-            res.settle(desc, null);
+            res.complete(desc, null);
         } else {
             // if service is not present, add it to list and
             // fulfil the future once the required service registers
@@ -91,7 +91,7 @@ public class ServiceMaster extends Actor<ServiceMaster> {
                             //System.out.println("member added "+memberDesc+" tostart:"+servicesToStart.size());
                             remoteRef.$receive( new InitMsg(self()) );
                             if ( toStarteSize == 0 ) {
-                                allNodesStarted.settle();
+                                allNodesStarted.complete();
                             }
                             // registering is done by each service on its own.
                             //$registerService(new ServiceDescription());
