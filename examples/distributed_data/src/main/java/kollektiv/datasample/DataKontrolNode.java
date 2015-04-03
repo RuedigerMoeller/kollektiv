@@ -5,7 +5,7 @@ import org.nustaq.kollektiv.KollektivMaster;
 import org.nustaq.kollektiv.KollektivMember;
 import org.nustaq.kollektiv.MemberDescription;
 import org.nustaq.kontraktor.*;
-import org.nustaq.kontraktor.util.FutureLatch;
+import org.nustaq.kontraktor.util.PromiseLatch;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,7 +20,7 @@ public class DataKontrolNode extends Actor<DataKontrolNode> {
     KollektivMaster master;
     List<DataMapActor> memberActors;
 
-    public Future $main( String arg[] ) {
+    public IPromise $main( String arg[] ) {
         try {
             master = KollektivMaster.Start( KollektivMember.DEFAULT_PORT, ConnectionType.Connect, self() );
             memberActors = new ArrayList<>();
@@ -31,7 +31,7 @@ public class DataKontrolNode extends Actor<DataKontrolNode> {
                 for (int i = 0; i < master.getMembers().size(); i++) {
                     MemberDescription mdesc = master.getMembers().get(i);
                     // await is like yield, but does not throw ex
-                    DataMapActor node = master.$runMaster(mdesc.getMember(), DataMapActor.class).awaitFuture().get();
+                    DataMapActor node = master.$runMaster(mdesc.getMember(), DataMapActor.class).awaitPromise().get();
                     if ( node != null ) {
                         memberActors.add(node);
                     }
@@ -58,7 +58,7 @@ public class DataKontrolNode extends Actor<DataKontrolNode> {
         System.out.println("finished running test logic"); // actually its in flight ..
 
         Promise loopEnd = new Promise();
-        FutureLatch latch = new FutureLatch( loopEnd, memberActors.size() );
+        PromiseLatch latch = new PromiseLatch( loopEnd, memberActors.size() );
 
         // send a spore to each DataMapActor
         memberActors.forEach( dmNode -> {
@@ -101,7 +101,7 @@ public class DataKontrolNode extends Actor<DataKontrolNode> {
      * nodes using modulo of hashkey
      * @param key
      */
-    public Future $get(Object key) {
+    public IPromise $get(Object key) {
         int nodeNum = key.hashCode() % memberActors.size();
         DataMapActor dataMapActor = memberActors.get(nodeNum);
         return dataMapActor.$get(key);

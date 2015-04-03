@@ -3,7 +3,7 @@ package kollektiv.datasample;
 import org.nustaq.kollektiv.KollektivMember;
 import org.nustaq.kollektiv.MasterConnectedMsg;
 import org.nustaq.kontraktor.Actor;
-import org.nustaq.kontraktor.Future;
+import org.nustaq.kontraktor.IPromise;
 import org.nustaq.kontraktor.Promise;
 import org.nustaq.kontraktor.Spore;
 
@@ -25,7 +25,7 @@ public class DataMapActor<K,V> extends Actor<DataMapActor<K,V>> {
         mappedValues.put(key,value);
     }
 
-    public Future<V> $get( K key ) {
+    public IPromise<V> $get( K key ) {
         return new Promise(mappedValues.get(key) );
     }
 
@@ -35,7 +35,7 @@ public class DataMapActor<K,V> extends Actor<DataMapActor<K,V>> {
     }
 
     @Override
-    public Future $receive(Object message) {
+    public IPromise $receive(Object message) {
         if ( message == KollektivMember.MASTER_LOST ) {
             // null or flag references to master in case
             System.out.println("master lost msg");

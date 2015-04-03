@@ -23,12 +23,12 @@ public class TestActor extends Actor<TestActor> {
         this.master = master;
     }
 
-    public Future<String> $method(String s) {
+    public IPromise<String> $method(String s) {
         Log.Info( this, "method received "+s);
         return new Promise<>(s+s);
     }
 
-    public Future<Long> $roundtrip( long time ) {
+    public IPromise<Long> $roundtrip( long time ) {
         return new Promise<>(time);
     }
 

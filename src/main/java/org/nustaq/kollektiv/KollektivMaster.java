@@ -88,7 +88,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         this.customFacade = appProvided;
     }
 
-    public Future<MasterDescription> $registerMember(MemberDescription sld) {
+    public IPromise<MasterDescription> $registerMember(MemberDescription sld) {
         Log.Info(this, "complete registration " + sld + " members:" + members.size() + 1);
         Promise p = new Promise();
         if ( connectionType == ConnectionType.Reconnect ) {
@@ -243,7 +243,7 @@ public class KollektivMaster extends Actor<KollektivMaster> {
      * @param i
      * @return
      */
-    public Future $onMemberMoreThan(int i) {
+    public IPromise $onMemberMoreThan(int i) {
         Promise p = new Promise();
         final ListTrigger trigger = new ListTrigger();
         trigger.setCondition(description -> {
@@ -267,11 +267,11 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         });
     }
 
-    @CallerSideMethod public <T extends Actor> Future<T> $runOnDescription( MemberDescription description, Class<T> actorClass) {
+    @CallerSideMethod public <T extends Actor> IPromise<T> $runOnDescription( MemberDescription description, Class<T> actorClass) {
         return $runMaster(description.getMember(), actorClass);
     }
 
-    public <T extends Actor> Future<T> $runMaster(KollektivMember member, Class<T> actorClass) {
+    public <T extends Actor> IPromise<T> $runMaster(KollektivMember member, Class<T> actorClass) {
         if ( members.size() == 0 ) {
             return new Promise<>(null,"no members available");
         }

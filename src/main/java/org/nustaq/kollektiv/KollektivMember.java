@@ -145,7 +145,7 @@ public class KollektivMember extends Actor<KollektivMember> {
 
     }
 
-    public Future<Actor> $runMember(String clazzname) {
+    public IPromise<Actor> $runMember(String clazzname) {
         Promise res = new Promise();
         try {
             ActorAppBundle actorAppBundle = app;
@@ -207,16 +207,16 @@ public class KollektivMember extends Actor<KollektivMember> {
         actors.forEach( a -> a.$stop() );
     }
 
-    public Future<List<Actor>> $allActors() {
+    public IPromise<List<Actor>> $allActors() {
         return new Promise<>(new ArrayList<>(actors));
     }
 
-    public Future<List<ActorDescription>> $allActorNames() {
+    public IPromise<List<ActorDescription>> $allActorNames() {
         filterLiveActors();
         return new Promise<>(actors.stream().map( in -> new ActorDescription(in) ).collect(Collectors.toList()) );
     }
 
-    public Future $reconnect( KollektivMaster master ) {
+    public IPromise $reconnect( KollektivMaster master ) {
         if ( app == null ) {
             return new Promise<>(null, new RuntimeException("member has no classdefinitions, but tries to reconnect."));
         }
@@ -227,7 +227,7 @@ public class KollektivMember extends Actor<KollektivMember> {
         return new Promise<>(null);
     }
 
-    public Future $defineNameSpace( ActorAppBundle bundle ) {
+    public IPromise $defineNameSpace( ActorAppBundle bundle ) {
         try {
             File base = new File( options.getTmpDirectory() + File.separator + nodeId+File.separator+bundle);
             int count = 0;

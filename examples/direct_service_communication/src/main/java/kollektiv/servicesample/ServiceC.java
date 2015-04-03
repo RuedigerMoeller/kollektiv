@@ -1,7 +1,7 @@
 package kollektiv.servicesample;
 
 import org.nustaq.kontraktor.Actor;
-import org.nustaq.kontraktor.Future;
+import org.nustaq.kontraktor.IPromise;
 import org.nustaq.kontraktor.remoting.tcp.TCPActorClient;
 import org.nustaq.kontraktor.util.Log;
 
@@ -27,7 +27,7 @@ public class ServiceC extends AbstractService<ServiceC> {
         // serviceC depends on service A and B.
         // create a direct connections to avoid tunneling each message  via ServiceMaster
         Log.Warn(this, "waiting for B");
-        Future<Future<ServiceDescription>[]> bothpresent = all(
+        IPromise<IPromise<ServiceDescription>[]> bothpresent = all(
                                                                   serviceMaster.$waitForService("ServiceA"),
                                                                   serviceMaster.$waitForService("ServiceB")
         );
@@ -40,7 +40,7 @@ public class ServiceC extends AbstractService<ServiceC> {
 
                 try {
                     // note: there is a second variant of Connect which allows to install a failure handler
-                    Future<? extends Actor> connect = TCPActorClient.Connect(clazz, serviceDesc.getHost(), serviceDesc.getPort());
+                    IPromise<? extends Actor> connect = TCPActorClient.Connect(clazz, serviceDesc.getHost(), serviceDesc.getPort());
                     if (connect == null) {
                         // socket related error (still in use or refused) retry
                         delayed(500, () -> tryConnect());

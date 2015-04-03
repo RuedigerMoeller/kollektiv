@@ -1,11 +1,9 @@
 package kollektiv.servicesample;
 
-import org.nustaq.kontraktor.Future;
+import org.nustaq.kontraktor.IPromise;
 import org.nustaq.kontraktor.Promise;
 import org.nustaq.kontraktor.remoting.tcp.TCPActorClient;
 import org.nustaq.kontraktor.util.Log;
-
-import java.io.IOException;
 
 /**
  * Created by ruedi on 23/03/15.
@@ -31,7 +29,7 @@ public class ServiceA extends AbstractService<ServiceA> {
         serviceMaster.$waitForService("ServiceB").onResult(serviceDesc -> {
             try {
                 // note: there is a second variant of Connect which allows to install a failure handler
-                Future<ServiceB> connect = TCPActorClient.Connect(ServiceB.class, serviceDesc.getHost(), serviceDesc.getPort());
+                IPromise<ServiceB> connect = TCPActorClient.Connect(ServiceB.class, serviceDesc.getHost(), serviceDesc.getPort());
                 if (connect == null) {
                     // socket related error (still in use or refused) retry
                     delayed(500, () -> tryConnect());
@@ -61,7 +59,7 @@ public class ServiceA extends AbstractService<ServiceA> {
         });
     }
 
-    public Future<String> $doubleMe(String s) {
+    public IPromise<String> $doubleMe(String s) {
         return new Promise<>(s+s);
     }
 

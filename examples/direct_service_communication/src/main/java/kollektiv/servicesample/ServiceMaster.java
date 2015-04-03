@@ -4,7 +4,7 @@ import org.nustaq.kollektiv.ConnectionType;
 import org.nustaq.kollektiv.KollektivMaster;
 import org.nustaq.kollektiv.KollektivMember;
 import org.nustaq.kontraktor.Actor;
-import org.nustaq.kontraktor.Future;
+import org.nustaq.kontraktor.IPromise;
 import org.nustaq.kontraktor.Promise;
 
 import java.util.*;
@@ -46,7 +46,7 @@ public class ServiceMaster extends Actor<ServiceMaster> {
         }
     }
 
-    public Future<ServiceDescription> $waitForService( String name ) {
+    public IPromise<ServiceDescription> $waitForService( String name ) {
         Promise<ServiceDescription> res = new Promise<>();
         ServiceDescription desc = findService(name);
         if ( desc != null ) {

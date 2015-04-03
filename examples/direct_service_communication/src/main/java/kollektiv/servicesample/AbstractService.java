@@ -2,7 +2,7 @@ package kollektiv.servicesample;
 
 import org.nustaq.kollektiv.KollektivMember;
 import org.nustaq.kontraktor.Actor;
-import org.nustaq.kontraktor.Future;
+import org.nustaq.kontraktor.IPromise;
 import org.nustaq.kontraktor.remoting.tcp.TCPActorServer;
 
 import java.net.InetAddress;
@@ -20,7 +20,7 @@ public abstract class AbstractService<T extends AbstractService> extends Actor<T
     }
 
     @Override
-    public Future $receive(Object message) {
+    public IPromise $receive(Object message) {
         if (message instanceof InitMsg) {
             InitMsg initmsg = (InitMsg) message;
             serviceMaster = initmsg.getMaster();
