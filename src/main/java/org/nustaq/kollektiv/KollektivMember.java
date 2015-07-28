@@ -74,21 +74,21 @@ public class KollektivMember extends Actor<KollektivMember> {
                         tryConnect = false;
                         if (options.remoteLog) {
                             Log.Lg.setLogWrapper(
-                                    (Thread t, int severity, Object source, Throwable ex, String msg) -> {
-                                        String exString = null;
-                                        if (ex != null) {
-                                            StringWriter sw = new StringWriter();
-                                            PrintWriter pw = new PrintWriter(sw);
-                                            ex.printStackTrace(pw);
-                                            exString = sw.toString();
-                                        }
-                                        if (master.isStopped()) {
-                                            if (Log.Lg.getSeverity() <= severity)
-                                                Log.Lg.defaultLogger.msg(t, severity, source, ex, msg);
-                                        } else {
-                                            master.$remoteLog(severity, nodeId + "[" + source + "]", exString == null ? msg : msg + "\n" + exString);
-                                        }
+                                (Thread t, int severity, Object source, Throwable ex, String msg) -> {
+                                    String exString = null;
+                                    if (ex != null) {
+                                        StringWriter sw = new StringWriter();
+                                        PrintWriter pw = new PrintWriter(sw);
+                                        ex.printStackTrace(pw);
+                                        exString = sw.toString();
                                     }
+                                    if (master.isStopped()) {
+                                        if (Log.Lg.getSeverity() <= severity)
+                                            Log.Lg.defaultLogger.msg(t, severity, source, ex, msg);
+                                    } else {
+                                        master.$remoteLog(severity, nodeId + "[" + source + "]", exString == null ? msg : msg + "\n" + exString);
+                                    }
+                                }
                             );
                             Log.Lg.warn(this, " start logging from " + nodeId);
                         }
