@@ -59,7 +59,7 @@ public class Kontrol {
             System.exit(-1);
         }
 
-        Log.Lg.$setSeverity(Log.WARN);
+        Log.setLevel(Log.WARN);
 
         System.out.println();
         System.out.println("start listening for members on "+options);
@@ -70,7 +70,7 @@ public class Kontrol {
         master.$onMemberAdd( member -> {
             System.out.println("Member added "+member);
             if ( options.stop ) {
-                member.getMember().$shutdownAllActors();
+//                member.getMember().$shutdownAllActors();
             }
             if ( options.terminate ) {
                 member.getMember().$terminate(3000);
@@ -90,10 +90,6 @@ public class Kontrol {
         System.out.println("Summary");
         System.out.println("=======");
         System.out.println("Members("+members.size()+"):");
-        members.forEach(member -> {
-            System.out.println(member);
-            member.getMember().$allActorNames().await().forEach( actorDescription -> System.out.println( "  "+actorDescription ));
-        });
 
         System.exit(-1);
     }

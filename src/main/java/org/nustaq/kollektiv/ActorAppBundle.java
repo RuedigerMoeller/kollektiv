@@ -1,13 +1,5 @@
 package org.nustaq.kollektiv;
-
-import org.nustaq.kontraktor.Actor;
-
-import java.io.File;
-import java.io.IOException;
 import java.io.Serializable;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 
 /**
@@ -28,7 +20,6 @@ public class ActorAppBundle implements Serializable {
     HashMap<String,CPEntry> resources = new HashMap<>();
 
     transient String baseDir;
-    transient MemberClassLoader loader;
 
     public void put(String normalizedPath, byte[] bytes) {
         resources.put(normalizedPath, new CPEntry(bytes, normalizedPath));
@@ -59,25 +50,4 @@ public class ActorAppBundle implements Serializable {
         this.baseDir = baseDir;
     }
 
-    public MemberClassLoader getLoader() {
-        return loader;
-    }
-
-    public void setLoader(MemberClassLoader loader) {
-        this.loader = loader;
-    }
-
-    public byte[] findClass(String name) {
-        name = name.replace( '.', File.separatorChar );
-        Path path = Paths.get(baseDir + File.separator + name + ".class");
-        if ( path.toFile().exists() ) {
-            try {
-                return Files.readAllBytes(path);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-        return null;
-    }
-    
 }

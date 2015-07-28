@@ -3,7 +3,7 @@ package org.nustaq.kollektiv;
 import org.nustaq.kontraktor.*;
 import org.nustaq.kontraktor.annotations.CallerSideMethod;
 import org.nustaq.kontraktor.annotations.InThread;
-import org.nustaq.kontraktor.remoting.tcp.TCPActorServer;
+import org.nustaq.kontraktor.remoting.tcp.*;
 import org.nustaq.kontraktor.util.Log;
 
 import java.io.File;
@@ -22,8 +22,9 @@ public class KollektivMaster extends Actor<KollektivMaster> {
 
     public static KollektivMaster Start( int port, ConnectionType type, Actor appProvided ) throws Exception {
         KollektivMaster master = Actors.AsActor(KollektivMaster.class);
-        master.$init(type,appProvided);
-        TCPActorServer.Publish(master, port, closedActor -> master.$memberDisconnected(closedActor));
+        master.$init(type, appProvided);
+        new TCPNIOPublisher(master, port)
+            .publish(closedActor -> master.$memberDisconnected(closedActor)).await();
         return master;
     }
 
@@ -92,23 +93,23 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         Log.Info(this, "complete registration " + sld + " members:" + members.size() + 1);
         Promise p = new Promise();
         if ( connectionType == ConnectionType.Reconnect ) {
-            sld.getMember().$reconnect(self())
-                .onError( err -> fullConnect(sld,p) )
-                .onResult( dummy -> {
-                    sld.getMember().$allActors().then((list, err) -> {
-                        if (err == null) {
-                            list.forEach(remoteactor -> sld.getRemotedActors().add(remoteactor));
-                            addMember(sld);
-                            p.resolve(new MasterDescription());
-                        } else {
-                            p.reject(err);
-                        }
-                    });
-                });
+//            sld.getMember().$reconnect(self())
+//                .onError( err -> fullConnect(sld,p) )
+//                .onResult( dummy -> {
+//                    sld.getMember().$allActors().then((list, err) -> {
+//                        if (err == null) {
+//                            list.forEach(remoteactor -> sld.getRemotedActors().add(remoteactor));
+//                            addMember(sld);
+//                            p.resolve(new MasterDescription());
+//                        } else {
+//                            p.reject(err);
+//                        }
+//                    });
+//                });
         } else if ( connectionType == ConnectionType.Connect ) {
             fullConnect(sld, p);
         } else {
-            sld.getMember().$reconnect(self());
+//            sld.getMember().$reconnect(self());
             addMember(sld);
             p.resolve(new MasterDescription());
         }
@@ -116,14 +117,12 @@ public class KollektivMaster extends Actor<KollektivMaster> {
     }
 
     void fullConnect(MemberDescription sld, Promise p) {
-        sld.getMember().$shutdownAllActors();
-        sld.getMember().$defineNameSpace(getCachedBundle(sld.getClasspath())).then( (r, e) -> {
+        sld.getMember().$install(getCachedBundle(sld.getClasspath())).then((r, e) -> {
             if (e == null) {
                 Log.Info(this, "transfer COMPLETE: " + sld);
                 addMember(sld);
                 p.complete(new MasterDescription(), null);
-            }
-            else {
+            } else {
                 if (e instanceof Throwable) {
                     ((Throwable) e).printStackTrace();
                 }
@@ -267,32 +266,28 @@ public class KollektivMaster extends Actor<KollektivMaster> {
         });
     }
 
-    @CallerSideMethod public <T extends Actor> IPromise<T> $runOnDescription( MemberDescription description, Class<T> actorClass) {
-        return $runMaster(description.getMember(), actorClass);
-    }
-
-    public <T extends Actor> IPromise<T> $runMaster(KollektivMember member, Class<T> actorClass) {
-        if ( members.size() == 0 ) {
-            return new Promise<>(null,"no members available");
-        }
-        Promise res = new Promise<>();
-        member.$runMember(actorClass.getName()).then((r, e) -> {
-            if ( r != null ) {
-                // cannot be stored in ref
-                // member.addActor(member);
-            }
-            res.complete(r, e);
-        });
-        return res;
-    }
+//    public <T extends Actor> IPromise<T> $runMaster(KollektivMember member, Class<T> actorClass) {
+//        if ( members.size() == 0 ) {
+//            return new Promise<>(null,"no members available");
+//        }
+//        Promise res = new Promise<>();
+//        member.$runMember(actorClass.getName()).then((r, e) -> {
+//            if ( r != null ) {
+//                // cannot be stored in ref
+//                // member.addActor(member);
+//            }
+//            res.complete(r, e);
+//        });
+//        return res;
+//    }
 
     public void $getMembers( Callback<MemberDescription> cb ) {
-        members.forEach( member -> cb.complete(member, CONT) );
-        cb.complete(null, FINSILENT);
+        members.forEach( member -> cb.stream(member) );
+        cb.finish();
     }
 
     public void $remoteLog( int severity, String source, String msg ) {
-        Log.Lg.$msg( null, severity, source, null, msg );
+        Log.Lg.msg( null, severity, source, null, msg );
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
